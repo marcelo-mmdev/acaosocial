@@ -1,0 +1,29 @@
+/* scanner.css */
+
+/* Botão "Select Camera" */
+#reader__camera_selection {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background-color: #16a34a; /* verde */
+  color: white;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+#reader__camera_selection:hover {
+  background-color: #15803d; /* verde escuro */
+}
+
+/* Botão "Stop Scanning" */
+#reader__dashboard_section_csr button {
+  padding: 8px 16px;
+  border-radius: 12px;
+  background-color: #dc2626; /* vermelho */
+  color: white !important;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+#reader__dashboard_section_csr button:hover {
+  background-color: #b91c1c; /* vermelho escuro */
+}
