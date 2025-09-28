@@ -51,8 +51,9 @@ export async function POST(req: Request): Promise<Response> {
             cpf: fields.cpf as string,
             rg: (fields.rg as string) || null,
             dataNascimento: fields.birthDate
-              ? new Date(fields.birthDate as string)
-              : null,
+            ? new Date(fields.birthDate as string).toISOString()
+            : null,
+
             endereco: (fields.address as string) || null,
             telefone: (fields.phone as string) || null,
             photo: photoPath,
@@ -81,7 +82,7 @@ export async function PUT(req: Request): Promise<Response> {
         cpf,
         endereco: endereco || null,
         telefone: telefone || null,
-        dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
+        dataNascimento: dataNascimento || null,
       },
     });
 
