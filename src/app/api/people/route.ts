@@ -32,13 +32,13 @@ export async function POST(req: Request): Promise<Response> {
         const photo = files?.photo as formidable.File;
         let photoPath = null;
 
-        if (photo && photo.filepath) {
-          const data = fs.readFileSync(photo.filepath);
+        if (photo && (photo as any).filepath) {
+          const data = fs.readFileSync((photo as any).filepath);
           const filename =
             "uploads/" +
             Date.now() +
             "_" +
-            (photo.originalFilename || "photo.jpg");
+            ((photo as any).originalFilename || "photo.jpg");
 
           fs.mkdirSync("public/uploads", { recursive: true });
           fs.writeFileSync("public/" + filename, data);
@@ -50,11 +50,11 @@ export async function POST(req: Request): Promise<Response> {
             name: fields.name as string,
             cpf: fields.cpf as string,
             rg: (fields.rg as string) || null,
-            birthDate: fields.birthDate
+            dataNascimento: fields.birthDate
               ? new Date(fields.birthDate as string)
               : null,
-            address: (fields.address as string) || null,
-            phone: (fields.phone as string) || null,
+            endereco: (fields.address as string) || null,
+            telefone: (fields.phone as string) || null,
             photo: photoPath,
           },
         });
@@ -72,11 +72,17 @@ export async function POST(req: Request): Promise<Response> {
 export async function PUT(req: Request): Promise<Response> {
   try {
     const body = await req.json();
-    const { id, name, cpf, address, phone } = body;
+    const { id, name, cpf, endereco, telefone, dataNascimento } = body;
 
     const p = await prisma.person.update({
       where: { id: Number(id) },
-      data: { name, cpf, address, phone },
+      data: {
+        name,
+        cpf,
+        endereco: endereco || null,
+        telefone: telefone || null,
+        dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
+      },
     });
 
     return NextResponse.json(p);
