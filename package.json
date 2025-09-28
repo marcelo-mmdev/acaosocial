@@ -27,6 +27,7 @@
     "dayjs": "^1.11.13",
     "formidable": "^3.5.2",
     "html5-qrcode": "2.3.8",
+    "iconv-lite": "^0.7.0",
     "json2csv": "^5.0.7",
     "jspdf": "^3.0.3",
     "lucide-react": "^0.544.0",
