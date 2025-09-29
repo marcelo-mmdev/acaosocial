@@ -25,6 +25,7 @@
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "dayjs": "^1.11.13",
+    "exceljs": "^4.4.0",
     "formidable": "^3.5.2",
     "html5-qrcode": "2.3.8",
     "iconv-lite": "^0.7.0",
