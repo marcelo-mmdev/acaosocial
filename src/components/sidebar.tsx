@@ -19,7 +19,7 @@ export function Sidebar() {
     { label: "Beneficiários", icon: Users, href: "/dashboard/pessoas" },
     { label: "Entrega via QRCode", icon: QrCode, href: "/dashboard/validar" },
     { label: "Usuários", icon: User, href: "/users" },
-    { label: "Relatórios", icon: Files, href: "/dashboard" },
+    { label: "Relatórios", icon: Files, href: "/reports" },
   ]
 
   return (
