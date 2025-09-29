@@ -24,19 +24,16 @@ export default function PessoasPage() {
   const [carteirinhaPessoa, setCarteirinhaPessoa] = useState<Pessoa | null>(null)
   const [abrirAdd, setAbrirAdd] = useState(false)
 
-  // modal detalhe
   const [selectedPerson, setSelectedPerson] = useState<Pessoa | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
 
   const qrRef = useRef<HTMLCanvasElement | null>(null)
 
-  // --- API: buscar lista (mapeia name->nome) ---
   const fetchPessoas = async () => {
     try {
       const res = await fetch("/api/pessoas")
       const json = await res.json()
       const raw = json.data || []
-      // normaliza campos para o frontend (nome em pt)
       const mapped: Pessoa[] = raw.map((p: any) => ({
         id: String(p.id),
         nome: p.nome || p.name || "",
@@ -58,12 +55,10 @@ export default function PessoasPage() {
     fetchPessoas()
   }, [])
 
-  // adicionar pessoa (front envia objeto com "nome" — o back aceita name||nome)
   const handleAddPessoa = async (novaPessoa: Pessoa) => {
     await fetch("/api/pessoas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // envia tanto name quanto nome para segurança
       body: JSON.stringify({
         nome: novaPessoa.nome,
         name: novaPessoa.nome,
@@ -102,7 +97,6 @@ export default function PessoasPage() {
     setPessoas((prev) => prev.filter((p) => p.id !== id))
   }
 
-  // pegar detalhe de uma pessoa (inclui deliveries)
   const onView = async (p: Pessoa) => {
     try {
       const res = await fetch(`/api/pessoas/${p.id}`)
@@ -129,7 +123,6 @@ export default function PessoasPage() {
     }
   }
 
-  // PDF carteirinha (mantive comportamento anterior)
   const handleDownloadPDF = (pessoa: Pessoa) => {
     const doc = new jsPDF("portrait", "mm", "a4")
     const card = { x: 30, y: 30, w: 150, h: 90 }
@@ -152,8 +145,7 @@ export default function PessoasPage() {
     doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" })
 
     const startX = photo.x + photo.w + 8
-    const firstY = photo.y + 6
-    let y = firstY
+    let y = photo.y + 6
     const lineH = 5
     doc.setFontSize(10)
     doc.setTextColor(0)
@@ -187,12 +179,10 @@ export default function PessoasPage() {
     doc.save(`carteirinha-${pessoa.nome}.pdf`)
   }
 
-  // filtro por pesquisa
   const filteredPessoas = pessoas.filter((p) =>
     (p.nome || "").toLowerCase().includes(search.toLowerCase())
   )
 
-  // meses para exibir no modal
   const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 
   return (
@@ -209,7 +199,6 @@ export default function PessoasPage() {
 
         <main className="flex-1 p-6 bg-gray-50">
           <div className="p-6 space-y-4">
-            {/* Ações topo */}
             <div className="flex items-center justify-between gap-3">
               <Input
                 placeholder="Pesquisar pessoas..."
@@ -217,10 +206,14 @@ export default function PessoasPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="max-w-sm"
               />
-              <Button onClick={() => setAbrirAdd(true)} className="bg-green-600 hover:bg-green-700 text-white">+ Beneficiário</Button>
+              <Button
+                onClick={() => setAbrirAdd(true)}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                + Beneficiário
+              </Button>
             </div>
 
-            {/* Tabela */}
             <DataTable
               columns={getColumns({
                 onView,
@@ -231,7 +224,7 @@ export default function PessoasPage() {
               data={filteredPessoas}
             />
 
-            {/* ---------- Modal Adicionar ---------- */}
+            {/* Modal Adicionar */}
             <Dialog open={abrirAdd} onOpenChange={setAbrirAdd}>
               <DialogContent className="bg-gradient-to-br from-green-50 to-green-100">
                 <DialogHeader>
@@ -274,7 +267,7 @@ export default function PessoasPage() {
               </DialogContent>
             </Dialog>
 
-            {/* ---------- Modal Editar ---------- */}
+            {/* Modal Editar */}
             {editPessoa && (
               <Dialog open={!!editPessoa} onOpenChange={() => setEditPessoa(null)}>
                 <DialogContent className="bg-gradient-to-br from-blue-50 to-blue-100">
@@ -316,99 +309,7 @@ export default function PessoasPage() {
                 </DialogContent>
               </Dialog>
             )}
-
-            {/* ---------- Modal Carteirinha ---------- */}
-            {carteirinhaPessoa && (
-              <Dialog open={!!carteirinhaPessoa} onOpenChange={() => setCarteirinhaPessoa(null)}>
-                <DialogContent className="bg-gradient-to-br from-blue-50 to-blue-100">
-                  <DialogHeader>
-                    <DialogTitle>Carteirinha</DialogTitle>
-                  </DialogHeader>
-                  <div className="bg-[#f5f9f4] border-2 border-green-900 shadow-md rounded-xl p-5 relative">
-                    <div className="text-center text-xs font-semibold text-green-900 space-y-1">
-                      <p>REPÚBLICA FEDERATIVA DA CIDADE DE TACAIMBÓ</p>
-                      <p>CARTEIRA DA SEC. ASSISTÊNCIA SOCIAL</p>
-                    </div>
-                    <div className="flex mt-4 gap-4">
-                      <div className="w-20 h-24 border bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 rounded-md">
-                        FOTO 3x4
-                      </div>
-                      <div className="flex-1 text-sm space-y-1">
-                        <p><strong>Nome:</strong> {carteirinhaPessoa.nome}</p>
-                        <p><strong>CPF:</strong> {carteirinhaPessoa.cpf}</p>
-                        <p><strong>RG:</strong> {carteirinhaPessoa.rg}</p>
-                        <p><strong>Nascimento:</strong> {carteirinhaPessoa.dataNascimento}</p>
-                        <p><strong>Endereço:</strong> {carteirinhaPessoa.endereco}</p>
-                        <p><strong>Telefone:</strong> {carteirinhaPessoa.telefone}</p>
-                      </div>
-                    </div>
-                    <div className="absolute bottom-3 right-3">
-                      <QRCodeCanvas ref={qrRef} value={`${carteirinhaPessoa.nome} - ${carteirinhaPessoa.cpf}`} size={128} includeMargin />
-                    </div>
-                  </div>
-                  <div className="flex justify-end pt-4">
-                    <Button onClick={() => handleDownloadPDF(carteirinhaPessoa)}>Baixar PDF</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
-
-            {/* ---------- Modal Detalhes (clicar no nome) ---------- */}
-            <Dialog open={detailOpen} onOpenChange={(v) => { if (!v) setSelectedPerson(null); setDetailOpen(v) }}>
-              <DialogContent className="bg-gradient-to-br from-blue-50 to-blue-100">
-                <DialogHeader>
-                  <DialogTitle>Detalhes da Pessoa</DialogTitle>
-                  <DialogDescription>Informações e histórico de entregas (cestas)</DialogDescription>
-                </DialogHeader>
-
-                {selectedPerson ? (
-                  <div className="space-y-4">
-                    <div className="flex gap-4 items-center">
-                      <div className="w-24 h-28 border bg-gray-100 flex items-center justify-center">FOTO</div>
-                      <div>
-                        <h3 className="text-lg font-semibold">{selectedPerson.nome}</h3>
-                        <div>CPF: {selectedPerson.cpf}</div>
-                        <div>RG: {selectedPerson.rg || "-"}</div>
-                        <div>Nasc: {selectedPerson.dataNascimento || "-"}</div>
-                        <div>Tel: {selectedPerson.telefone || "-"}</div>
-                        <div>Endereço: {selectedPerson.endereco || "-"}</div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold">Recebeu cesta no ano {new Date().getFullYear()}?</h4>
-                      <div className="grid grid-cols-3 gap-2 mt-2">
-                        {meses.map((m, idx) => {
-                          const monthNumber = idx + 1
-                          const has = (selectedPerson.deliveries || []).some(
-                            (d: any) => Number(d.year) === new Date().getFullYear() && Number(d.month) === monthNumber
-                          )
-                          return (
-                            <div key={m} className={`p-2 rounded ${has ? "bg-green-100 border border-green-400" : "bg-red-100 border border-red-300"}`}>
-                              <div className="text-sm font-medium">{m}</div>
-                              <div className="text-xs">{has ? "Recebeu ✅" : "Não recebeu ❌"}</div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold">Histórico de entregas</h4>
-                      <ul className="list-disc pl-5">
-                        {(selectedPerson.deliveries || []).length === 0 && <li>Nenhuma entrega registrada</li>}
-                        {(selectedPerson.deliveries || []).map((d:any) => (
-                          <li key={d.id}>{d.year}/{String(d.month).padStart(2,"0")} — {new Date(d.createdAt).toLocaleString()}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                ) : (
-                  <div>Carregando...</div>
-                )}
-              </DialogContent>
-            </Dialog>
-
+            
           </div>
         </main>
       </div>

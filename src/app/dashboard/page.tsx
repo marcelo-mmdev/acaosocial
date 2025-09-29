@@ -47,7 +47,7 @@ export default function DashboardPage() {
             <div className="p-6 space-y-6 w-full">
               {/* Botão fora dos cards */}
               <div className="flex justify-end">
-                <Link href="/dashboard/pessoas">
+                <Link href="/dashboard/pessoas" className="bg-gradient-to-br from-blue-50 to-blue-100">
                   <Button>Gerenciar Pessoas</Button>
                 </Link>
               </div>

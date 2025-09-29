@@ -11,7 +11,6 @@ export interface Pessoa {
   endereco: string
   telefone: string
   dataNascimento: string
-  // opcional: entregas quando vierem do back
   deliveries?: { id: number; year: number; month: number; createdAt: string }[]
 }
 
@@ -35,7 +34,7 @@ export const getColumns = ({
       const pessoa = row.original
       return (
         <button
-          className="text-left w-full hover:underline"
+          className="text-left w-full hover:underline text-blue-700"
           onClick={() => onView(pessoa)}
           title="Clique para ver detalhes"
         >
@@ -71,13 +70,25 @@ export const getColumns = ({
       const pessoa = row.original
       return (
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => onEdit(pessoa)}>
+          <Button
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => onEdit(pessoa)}
+          >
             Editar
           </Button>
-          <Button variant="destructive" size="sm" onClick={() => onDelete(pessoa.id)}>
+          <Button
+            size="sm"
+            className="bg-red-600 hover:bg-red-700 text-white"
+            onClick={() => onDelete(pessoa.id)}
+          >
             Excluir
           </Button>
-          <Button size="sm" onClick={() => onCarteirinha(pessoa)}>
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+            onClick={() => onCarteirinha(pessoa)}
+          >
             Carteirinha
           </Button>
         </div>

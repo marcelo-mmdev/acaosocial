@@ -31,11 +31,12 @@ export const getColumns = ({ onEdit, onDelete }: GetColumnsProps): ColumnDef<Usu
     header: "Ações",
     cell: ({ row }) => (
       <div className="flex gap-2">
-        <Button size="sm" variant="outline" onClick={() => onEdit(row.original)}>
+        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" variant="outline" onClick={() => onEdit(row.original)}>
           Editar
         </Button>
         <Button
           size="sm"
+          className="bg-red-600 hover:bg-red-700 text-white"
           variant="destructive"
           onClick={() => onDelete(row.original.id)}
         >

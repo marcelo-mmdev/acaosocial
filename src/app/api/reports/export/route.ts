@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import prisma from "../../../../lib/prisma";
+import path from "path";
+import fs from "fs";
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,12 +14,14 @@ export async function GET(req: NextRequest) {
     const year = Number(searchParams.get("year"));
 
     if (!type) {
-      return NextResponse.json({ error: "Tipo de relatório não informado" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tipo de relatório não informado" },
+        { status: 400 }
+      );
     }
 
     let data: any[] = [];
 
-    // 🔹 Buscar dados no banco conforme o tipo de relatório
     if (type === "people") {
       data = await prisma.person.findMany();
     } else if (type === "received") {
@@ -63,43 +67,54 @@ export async function GET(req: NextRequest) {
 
     // 🔹 Gerar PDF
     if (format === "pdf") {
-      const doc = new PDFDocument();
-      const chunks: Buffer[] = [];
-      doc.on("data", (c) => chunks.push(c));
+      return new Promise((resolve, reject) => {
+        const doc = new PDFDocument();
 
-      doc.fontSize(16).text("Relatório", { align: "center" });
-      doc.moveDown();
+        // 👇 Forçar uso de fonte custom
+        const fontPath = path.join(process.cwd(), "src", "fonts", "Roboto-Regular.ttf");
+        if (fs.existsSync(fontPath)) {
+          doc.font(fontPath);
+        }
 
-      if (type === "people" || type === "received" || type === "not-received") {
-        data.forEach((p: any) => {
-          doc.fontSize(12).text(`Nome: ${p.name}`);
-          doc.text(`CPF: ${p.cpf || "-"}`);
-          doc.text(`Telefone: ${p.telefone || "-"}`);
-          doc.text(`Endereço: ${p.endereco || "-"}`);
-          doc.moveDown();
+        const chunks: Buffer[] = [];
+        doc.on("data", (chunk) => chunks.push(chunk));
+        doc.on("end", () => {
+          const body = Buffer.concat(chunks);
+          resolve(
+            new NextResponse(body, {
+              headers: {
+                "Content-Type": "application/pdf",
+                "Content-Disposition": `attachment; filename="relatorio_${type}.pdf"`,
+              },
+            })
+          );
         });
-      } else if (type === "deliverers") {
-        data.forEach((u: any) => {
-          doc.fontSize(12).text(`Nome: ${u.name}`);
-          doc.text(`Email: ${u.email}`);
-          doc.moveDown();
-        });
-      }
+        doc.on("error", (err) => reject(err));
 
-      doc.end();
-      const body = await new Promise<Buffer>((resolve) =>
-        doc.on("end", () => resolve(Buffer.concat(chunks)))
-      );
+        doc.fontSize(16).text("Relatório", { align: "center" });
+        doc.moveDown();
 
-      return new NextResponse(new Uint8Array(body), {
-        headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename="relatorio_${type}.pdf"`,
-        },
-        });
+        if (type === "people" || type === "received" || type === "not-received") {
+          data.forEach((p: any) => {
+            doc.fontSize(12).text(`Nome: ${p.name}`);
+            doc.text(`CPF: ${p.cpf || "-"}`);
+            doc.text(`Telefone: ${p.telefone || "-"}`);
+            doc.text(`Endereço: ${p.endereco || "-"}`);
+            doc.moveDown();
+          });
+        } else if (type === "deliverers") {
+          data.forEach((u: any) => {
+            doc.fontSize(12).text(`Nome: ${u.name}`);
+            doc.text(`Email: ${u.email}`);
+            doc.moveDown();
+          });
+        }
+
+        doc.end();
+      });
     }
 
-    // 🔹 Gerar Excel
+    // 🔹 Gerar Excel (igual já estava)
     if (format === "excel") {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Relatório");
@@ -136,15 +151,19 @@ export async function GET(req: NextRequest) {
 
       return new NextResponse(new Uint8Array(buffer), {
         headers: {
-            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "Content-Disposition": `attachment; filename="relatorio_${type}.xlsx"`,
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="relatorio_${type}.xlsx"`,
         },
-        });
+      });
     }
 
     return NextResponse.json({ error: "Formato inválido" }, { status: 400 });
   } catch (err) {
     console.error("Erro no export:", err);
-    return NextResponse.json({ error: "Erro interno no servidor" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro interno no servidor" },
+      { status: 500 }
+    );
   }
 }

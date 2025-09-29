@@ -66,7 +66,7 @@ export function Sidebar() {
 
         <div className="p-4 border-t">
           <Button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => signOut({ callbackUrl: "/" })}
             variant="destructive"
             className="w-full justify-start gap-2 bg-red-600 hover:bg-red-700 rounded-xl border px-4 py-2 text-white text-sm"
           >

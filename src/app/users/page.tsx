@@ -93,10 +93,10 @@ export default function UsersPage() {
                 {/* Criar */}
                 <Dialog open={openCreate} onOpenChange={setOpenCreate}>
                   <DialogTrigger asChild>
-                    <Button>Novo Usuário</Button>
+                    <Button className="bg-green-600 hover:bg-green-700 text-white">Novo Usuário</Button>
                   </DialogTrigger>
 
-                  <DialogContent className="max-w-lg">
+                  <DialogContent className="max-w-lg bg-gradient-to-br from-blue-50 to-blue-100">
                     <DialogHeader>
                       <DialogTitle>Cadastrar Usuário</DialogTitle>
                     </DialogHeader>
@@ -107,7 +107,6 @@ export default function UsersPage() {
                       <select name="role" className="border p-2">
                         <option value="user">user</option>
                         <option value="admin">admin</option>
-                        <option value="adminin">adminin</option>
                       </select>
                       <div className="flex justify-end gap-2 mt-2">
                         <Button type="submit">Salvar</Button>

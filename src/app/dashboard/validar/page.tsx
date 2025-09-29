@@ -124,11 +124,11 @@ export default function ValidarPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-600">
               <CheckCircle2 className="w-6 h-6" />
-              QR Code Lido com Sucesso
+              Confirmar Entrega para {scannedResult}
             </DialogTitle>
           </DialogHeader>
           <div className="p-4 text-center">
-            <p className="mb-6 font-medium text-gray-700">{scannedResult}</p>
+            {/*<p className="mb-6 font-medium text-gray-700">{scannedResult}</p>*/}
             <Button
               className="bg-green-600 hover:bg-green-700 text-white px-6"
               onClick={() => setOpen(false)}
