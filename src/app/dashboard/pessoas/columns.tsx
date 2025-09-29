@@ -11,15 +11,19 @@ export interface Pessoa {
   endereco: string
   telefone: string
   dataNascimento: string
+  // opcional: entregas quando vierem do back
+  deliveries?: { id: number; year: number; month: number; createdAt: string }[]
 }
 
 interface GetColumnsProps {
+  onView: (pessoa: Pessoa) => void
   onEdit: (pessoa: Pessoa) => void
   onDelete: (id: string) => void
   onCarteirinha: (pessoa: Pessoa) => void
 }
 
 export const getColumns = ({
+  onView,
   onEdit,
   onDelete,
   onCarteirinha,
@@ -27,6 +31,18 @@ export const getColumns = ({
   {
     accessorKey: "nome",
     header: "Nome",
+    cell: ({ row }) => {
+      const pessoa = row.original
+      return (
+        <button
+          className="text-left w-full hover:underline"
+          onClick={() => onView(pessoa)}
+          title="Clique para ver detalhes"
+        >
+          {pessoa.nome}
+        </button>
+      )
+    },
   },
   {
     accessorKey: "cpf",
@@ -46,7 +62,7 @@ export const getColumns = ({
   },
   {
     accessorKey: "dataNascimento",
-    header: "Data de Nascimento",
+    header: "Data de Nasc.",
   },
   {
     id: "actions",
@@ -55,25 +71,13 @@ export const getColumns = ({
       const pessoa = row.original
       return (
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onEdit(pessoa)}
-          >
+          <Button variant="outline" size="sm" onClick={() => onEdit(pessoa)}>
             Editar
           </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => onDelete(pessoa.id)}
-          >
+          <Button variant="destructive" size="sm" onClick={() => onDelete(pessoa.id)}>
             Excluir
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onCarteirinha(pessoa)}
-          >
+          <Button size="sm" onClick={() => onCarteirinha(pessoa)}>
             Carteirinha
           </Button>
         </div>
