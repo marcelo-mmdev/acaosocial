@@ -1,6 +1,7 @@
+// src/app/dashboard/pessoas/page.tsx
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { DataTable } from "../../../components/data-table"
 import { getColumns, Pessoa } from "./columns"
 import { Button } from "../../../components/ui/button"
@@ -27,6 +28,10 @@ export default function PessoasPage() {
   // modal detalhe
   const [selectedPerson, setSelectedPerson] = useState<Pessoa | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+
+  // modal confirmação delete
+  const [deleteCandidate, setDeleteCandidate] = useState<Pessoa | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   const qrRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -97,20 +102,35 @@ export default function PessoasPage() {
     fetchPessoas()
   }
 
-  const handleDeletePessoa = async (id: string) => {
-    await fetch(`/api/pessoas/${id}`, { method: "DELETE" })
-    setPessoas((prev) => prev.filter((p) => p.id !== id))
+  // abre modal de confirmação (não deleta direto)
+  const handleAskDeletePessoa = (p: Pessoa) => {
+    setDeleteCandidate(p)
+    setConfirmDeleteOpen(true)
   }
 
-  // pegar detalhe de uma pessoa (inclui deliveries)
-  const onView = async (p: Pessoa) => {
+  const handleConfirmDelete = async () => {
+    if (!deleteCandidate) return
     try {
-      const res = await fetch(`/api/pessoas/${p.id}`)
-      if (!res.ok) {
-        alert("Erro ao carregar detalhes")
-        return
-      }
-      const data = await res.json()
+      await fetch(`/api/pessoas/${deleteCandidate.id}`, { method: "DELETE" })
+      setPessoas((prev) => prev.filter((x) => x.id !== deleteCandidate.id))
+      setDeleteCandidate(null)
+      setConfirmDeleteOpen(false)
+      // atualizar lista por segurança
+      fetchPessoas()
+    } catch (err) {
+      console.error("Erro ao deletar:", err)
+      alert("Erro ao deletar pessoa")
+    }
+  }
+
+  // REFRESH: pega detalhe atualizado de uma pessoa (inclui deliveries)
+  const refreshSelectedPerson = useCallback(async (id?: string) => {
+    if (!id) return
+    try {
+      const res = await fetch(`/api/pessoas/${id}`)
+      if (!res.ok) return
+      const json = await res.json()
+      const data = json.data ?? json
       const person: Pessoa = {
         id: String(data.id),
         nome: data.nome || data.name || "",
@@ -122,12 +142,31 @@ export default function PessoasPage() {
         deliveries: data.deliveries || [],
       }
       setSelectedPerson(person)
+    } catch (err) {
+      console.error("Erro ao atualizar detalhes da pessoa:", err)
+    }
+  }, [])
+
+  // pegar detalhe de uma pessoa (inicia com os dados do row e abre modal)
+  const onView = async (p: Pessoa) => {
+    try {
+      // setamos um objeto inicial (pode vir das listagem) para exibir algo rápido
+      setSelectedPerson(p)
       setDetailOpen(true)
+      // e já pedimos a versão definitiva do servidor (com deliveries atualizadas)
+      await refreshSelectedPerson(p.id)
     } catch (err) {
       console.error(err)
       alert("Erro ao carregar detalhes")
     }
   }
+
+  // sempre que abrir o modal para uma pessoa já selecionada, atualiza as entregas
+  useEffect(() => {
+    if (detailOpen && selectedPerson?.id) {
+      refreshSelectedPerson(selectedPerson.id)
+    }
+  }, [detailOpen, selectedPerson?.id, refreshSelectedPerson])
 
   // PDF carteirinha (mantive comportamento anterior)
   const handleDownloadPDF = (pessoa: Pessoa) => {
@@ -225,7 +264,7 @@ export default function PessoasPage() {
               columns={getColumns({
                 onView,
                 onEdit: (pessoa) => setEditPessoa(pessoa),
-                onDelete: handleDeletePessoa,
+                onDelete: handleAskDeletePessoa,
                 onCarteirinha: (pessoa) => setCarteirinhaPessoa(pessoa),
               })}
               data={filteredPessoas}
@@ -233,10 +272,10 @@ export default function PessoasPage() {
 
             {/* ---------- Modal Adicionar ---------- */}
             <Dialog open={abrirAdd} onOpenChange={setAbrirAdd}>
-              <DialogContent className="bg-gradient-to-br from-green-50 to-green-100">
+              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                 <DialogHeader>
-                  <DialogTitle className="text-green-700">Adicionar Beneficiário</DialogTitle>
-                  <DialogDescription className="text-green-600">Preencha os dados abaixo</DialogDescription>
+                  <DialogTitle className="--foreground">Adicionar Beneficiário</DialogTitle>
+                  <DialogDescription className="--foreground">Preencha os dados abaixo</DialogDescription>
                 </DialogHeader>
                 <form
                   onSubmit={(e) => {
@@ -277,9 +316,9 @@ export default function PessoasPage() {
             {/* ---------- Modal Editar ---------- */}
             {editPessoa && (
               <Dialog open={!!editPessoa} onOpenChange={() => setEditPessoa(null)}>
-                <DialogContent className="bg-gradient-to-br from-blue-50 to-blue-100">
+                <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                   <DialogHeader>
-                    <DialogTitle className="text-blue-700">Editar Beneficiário</DialogTitle>
+                    <DialogTitle className="--foreground">Editar Beneficiário</DialogTitle>
                   </DialogHeader>
                   <form
                     onSubmit={(e) => {
@@ -293,6 +332,7 @@ export default function PessoasPage() {
                         endereco: String(fd.get("endereco") || editPessoa.endereco),
                         telefone: String(fd.get("telefone") || editPessoa.telefone),
                         dataNascimento: String(fd.get("dataNascimento") || editPessoa.dataNascimento),
+                        deliveries: editPessoa.deliveries || [],
                       }
                       handleEditPessoa(pessoaEditada)
                     }}
@@ -320,9 +360,9 @@ export default function PessoasPage() {
             {/* ---------- Modal Carteirinha ---------- */}
             {carteirinhaPessoa && (
               <Dialog open={!!carteirinhaPessoa} onOpenChange={() => setCarteirinhaPessoa(null)}>
-                <DialogContent className="bg-gradient-to-br from-blue-50 to-blue-100">
+                <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                   <DialogHeader>
-                    <DialogTitle>Carteirinha</DialogTitle>
+                    <DialogTitle className="--foreground">Carteirinha</DialogTitle>
                   </DialogHeader>
                   <div className="bg-[#f5f9f4] border-2 border-green-900 shadow-md rounded-xl p-5 relative">
                     <div className="text-center text-xs font-semibold text-green-900 space-y-1">
@@ -343,7 +383,7 @@ export default function PessoasPage() {
                       </div>
                     </div>
                     <div className="absolute bottom-3 right-3">
-                      <QRCodeCanvas ref={qrRef} value={`${carteirinhaPessoa.nome} - ${carteirinhaPessoa.cpf}`} size={128} includeMargin />
+                      <QRCodeCanvas ref={qrRef} value={String(carteirinhaPessoa.id)} size={128} includeMargin />
                     </div>
                   </div>
                   <div className="flex justify-end pt-4">
@@ -355,10 +395,10 @@ export default function PessoasPage() {
 
             {/* ---------- Modal Detalhes (clicar no nome) ---------- */}
             <Dialog open={detailOpen} onOpenChange={(v) => { if (!v) setSelectedPerson(null); setDetailOpen(v) }}>
-              <DialogContent className="bg-gradient-to-br from-blue-50 to-blue-100">
+              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                 <DialogHeader>
-                  <DialogTitle>Detalhes da Pessoa</DialogTitle>
-                  <DialogDescription>Informações e histórico de entregas (cestas)</DialogDescription>
+                  <DialogTitle className="--foreground">Detalhes da Pessoa</DialogTitle>
+                  <DialogDescription className="--foreground">Informações e histórico de entregas (cestas)</DialogDescription>
                 </DialogHeader>
 
                 {selectedPerson ? (
@@ -375,37 +415,80 @@ export default function PessoasPage() {
                       </div>
                     </div>
 
+                    {/* --- Status por mês do ano atual --- */}
                     <div>
-                      <h4 className="font-semibold">Recebeu cesta no ano {new Date().getFullYear()}?</h4>
+                      <h4 className="font-semibold">Cestas recebidas no ano {new Date().getFullYear()}</h4>
                       <div className="grid grid-cols-3 gap-2 mt-2">
                         {meses.map((m, idx) => {
                           const monthNumber = idx + 1
-                          const has = (selectedPerson.deliveries || []).some(
-                            (d: any) => Number(d.year) === new Date().getFullYear() && Number(d.month) === monthNumber
+                          // procura entrega no mês/ano
+                          const entrega = (selectedPerson.deliveries || []).find(
+                            (d: any) =>
+                              Number(d.year) === new Date().getFullYear() &&
+                              Number(d.month) === monthNumber
                           )
+                          // considera createdAt como deliveredAt quando deliveredAt não existir
+                          const deliveredAt = entrega?.deliveredAt ?? entrega?.createdAt
+                          const has = !!deliveredAt
                           return (
-                            <div key={m} className={`p-2 rounded ${has ? "bg-green-100 border border-green-400" : "bg-red-100 border border-red-300"}`}>
+                            <div
+                              key={m}
+                              className={`p-2 rounded ${
+                                has
+                                  ? "bg-green-100 border border-green-400"
+                                  : "bg-red-100 border border-red-300"
+                              }`}
+                            >
                               <div className="text-sm font-medium">{m}</div>
-                              <div className="text-xs">{has ? "Recebeu ✅" : "Não recebeu ❌"}</div>
+                              <div className="text-xs">
+                                {has
+                                  ? `Recebeu ✅ (${new Date(deliveredAt as string).toLocaleDateString()})`
+                                  : "Não recebeu ❌"}
+                              </div>
                             </div>
                           )
                         })}
                       </div>
                     </div>
 
+                    {/* --- Histórico de entregas --- */}
                     <div>
                       <h4 className="font-semibold">Histórico de entregas</h4>
                       <ul className="list-disc pl-5">
-                        {(selectedPerson.deliveries || []).length === 0 && <li>Nenhuma entrega registrada</li>}
-                        {(selectedPerson.deliveries || []).map((d:any) => (
-                          <li key={d.id}>{d.year}/{String(d.month).padStart(2,"0")} — {new Date(d.createdAt).toLocaleString()}</li>
-                        ))}
+                        {(selectedPerson.deliveries || []).length === 0 && (
+                          <li>Nenhuma entrega registrada</li>
+                        )}
+                        {(selectedPerson.deliveries || []).map((d: any) => {
+                          const dt = d.deliveredAt ?? d.createdAt
+                          return (
+                            <li key={d.id}>
+                              {d.year}/{String(d.month).padStart(2, "0")} —{" "}
+                              {dt ? new Date(dt).toLocaleString() : "Não recebido"}
+                            </li>
+                          )
+                        })}
                       </ul>
                     </div>
                   </div>
                 ) : (
                   <div>Carregando...</div>
                 )}
+              </DialogContent>
+            </Dialog>
+
+            {/* ---------- Modal Confirmação Deletar ---------- */}
+            <Dialog open={confirmDeleteOpen} onOpenChange={(v) => { if (!v) setDeleteCandidate(null); setConfirmDeleteOpen(v) }}>
+              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+                <DialogHeader>
+                  <DialogTitle className="--foreground">Confirmar exclusão</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p>Tem certeza que deseja excluir <strong>{deleteCandidate?.nome}</strong>?</p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => { setConfirmDeleteOpen(false); setDeleteCandidate(null) }}>Cancelar</Button>
+                    <Button variant="destructive" onClick={handleConfirmDelete}>Excluir</Button>
+                  </div>
+                </div>
               </DialogContent>
             </Dialog>
 

@@ -1,4 +1,3 @@
-// src/app/api/pessoas/route.ts
 import { NextResponse } from "next/server";
 import prisma from "../../../lib/prisma";
 
@@ -7,6 +6,7 @@ function mapPersonToFront(p: any) {
     ...p,
     nome: p.name,
     id: String(p.id),
+    deliveries: p.deliveries || [],
   };
 }
 
@@ -19,7 +19,10 @@ export async function GET(req: Request) {
 
     const where = search
       ? {
-          OR: [{ name: { contains: search, mode: "insensitive" } }, { cpf: { contains: search } }],
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { cpf: { contains: search } },
+          ],
         }
       : undefined;
 
@@ -29,6 +32,7 @@ export async function GET(req: Request) {
         orderBy: { name: "asc" },
         skip: (page - 1) * limit,
         take: limit,
+        include: { deliveries: true },
       }),
       prisma.person.count({ where }),
     ]);
@@ -47,7 +51,10 @@ export async function POST(req: Request) {
     const nome = body.nome || body.name;
     const cpf = body.cpf;
     if (!nome || !cpf) {
-      return NextResponse.json({ error: "Nome e CPF são obrigatórios" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Nome e CPF são obrigatórios" },
+        { status: 400 }
+      );
     }
 
     const created = await prisma.person.create({
@@ -60,12 +67,15 @@ export async function POST(req: Request) {
         dataNascimento: body.dataNascimento || null,
         photo: body.photo || null,
       },
+      include: { deliveries: true },
     });
 
     return NextResponse.json({ data: mapPersonToFront(created) }, { status: 201 });
   } catch (err: any) {
     console.error("POST /api/pessoas error:", err);
-    // se unique cpf falhar, err.message terá detalhe
-    return NextResponse.json({ error: "Erro ao criar pessoa", details: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro ao criar pessoa", details: err.message },
+      { status: 500 }
+    );
   }
 }

@@ -1,3 +1,7 @@
+// 🚀 Corrige erro de build estático (Next tenta pré-renderizar esta rota)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
@@ -5,7 +9,7 @@ import prisma from "../../../../lib/prisma";
 import path from "path";
 import fs from "fs";
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<Response> {
   try {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
@@ -65,56 +69,53 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 🔹 Gerar PDF
+    // 🔹 Geração de PDF
     if (format === "pdf") {
-      return new Promise((resolve, reject) => {
-        const doc = new PDFDocument();
+      const doc = new PDFDocument();
+      const fontPath = path.join(process.cwd(), "src", "fonts", "Roboto-Regular.ttf");
+      if (fs.existsSync(fontPath)) doc.font(fontPath);
 
-        // 👇 Forçar uso de fonte custom
-        const fontPath = path.join(process.cwd(), "src", "fonts", "Roboto-Regular.ttf");
-        if (fs.existsSync(fontPath)) {
-          doc.font(fontPath);
-        }
+      const chunks: Buffer[] = [];
+      doc.on("data", (chunk) => chunks.push(chunk));
 
-        const chunks: Buffer[] = [];
-        doc.on("data", (chunk) => chunks.push(chunk));
-        doc.on("end", () => {
-          const body = Buffer.concat(chunks);
-          resolve(
-            new NextResponse(body, {
-              headers: {
-                "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="relatorio_${type}.pdf"`,
-              },
-            })
-          );
+      doc.fontSize(16).text("Relatório", { align: "center" });
+      doc.moveDown();
+
+      if (type === "people" || type === "received" || type === "not-received") {
+        data.forEach((p: any) => {
+          doc.fontSize(12).text(`Nome: ${p.name}`);
+          doc.text(`CPF: ${p.cpf || "-"}`);
+          doc.text(`Telefone: ${p.telefone || "-"}`);
+          doc.text(`Endereço: ${p.endereco || "-"}`);
+          doc.moveDown();
         });
-        doc.on("error", (err) => reject(err));
+      } else if (type === "deliverers") {
+        data.forEach((u: any) => {
+          doc.fontSize(12).text(`Nome: ${u.name}`);
+          doc.text(`Email: ${u.email}`);
+          doc.moveDown();
+        });
+      }
 
-        doc.fontSize(16).text("Relatório", { align: "center" });
-        doc.moveDown();
+      doc.end();
 
-        if (type === "people" || type === "received" || type === "not-received") {
-          data.forEach((p: any) => {
-            doc.fontSize(12).text(`Nome: ${p.name}`);
-            doc.text(`CPF: ${p.cpf || "-"}`);
-            doc.text(`Telefone: ${p.telefone || "-"}`);
-            doc.text(`Endereço: ${p.endereco || "-"}`);
-            doc.moveDown();
-          });
-        } else if (type === "deliverers") {
-          data.forEach((u: any) => {
-            doc.fontSize(12).text(`Nome: ${u.name}`);
-            doc.text(`Email: ${u.email}`);
-            doc.moveDown();
-          });
-        }
+      const buffer = await new Promise<Buffer>((resolve, reject) => {
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", reject);
+      });
 
-        doc.end();
+      const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+
+      // ✅ Garante tipo compatível (usa Uint8Array como corpo)
+      return new Response(new Uint8Array(arrayBuffer), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="relatorio_${type}.pdf"`,
+        },
       });
     }
 
-    // 🔹 Gerar Excel (igual já estava)
+    // 🔹 Geração de Excel
     if (format === "excel") {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Relatório");
@@ -149,7 +150,7 @@ export async function GET(req: NextRequest) {
 
       const buffer = await workbook.xlsx.writeBuffer();
 
-      return new NextResponse(new Uint8Array(buffer), {
+      return new Response(buffer, {
         headers: {
           "Content-Type":
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

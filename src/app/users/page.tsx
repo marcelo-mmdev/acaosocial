@@ -1,4 +1,3 @@
-// src/app/users/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -15,19 +14,24 @@ import {
 } from "../../components/ui/dialog";
 import { Sidebar } from "../../components/sidebar";
 import { MobileSidebar } from "../../components/mobileSidebar";
-
-type UserItem = { id: string; name: string; email: string; role: string };
+import type { Usuario } from "../../interface/user";
 
 export default function UsersPage() {
   const [openCreate, setOpenCreate] = useState(false);
-  const [openEdit, setOpenEdit] = useState<UserItem | null>(null);
-  const [openDelete, setOpenDelete] = useState<UserItem | null>(null);
-  const [users, setUsers] = useState<UserItem[]>([]);
+  const [openEdit, setOpenEdit] = useState<Usuario | null>(null);
+  const [openDelete, setOpenDelete] = useState<Usuario | null>(null);
+  const [users, setUsers] = useState<Usuario[]>([]);
 
+  // 🔹 Buscar usuários
   const fetchUsers = async () => {
     const res = await fetch("/api/users");
     const json = await res.json();
-    const data = (json.data || []).map((u: any) => ({ ...u, id: String(u.id) }));
+    const data: Usuario[] = (json.data || []).map((u: any) => ({
+      id: String(u.id),
+      name: u.name,
+      email: u.email,
+      role: u.role,
+    }));
     setUsers(data);
   };
 
@@ -35,6 +39,7 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
+  // 🔹 Criar usuário
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget as HTMLFormElement);
@@ -44,11 +49,16 @@ export default function UsersPage() {
       password: String(fd.get("password")),
       role: String(fd.get("role") || "user"),
     };
-    await fetch("/api/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+    await fetch("/api/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
     setOpenCreate(false);
     fetchUsers();
   };
 
+  // 🔹 Editar usuário
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!openEdit) return;
@@ -60,11 +70,18 @@ export default function UsersPage() {
     };
     const pass = fd.get("password");
     if (pass) payload.password = String(pass);
-    await fetch(`/api/users/${openEdit.id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+
+    await fetch(`/api/users/${openEdit.id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
     setOpenEdit(null);
     fetchUsers();
   };
 
+  // 🔹 Deletar usuário
   const confirmDelete = async () => {
     if (!openDelete) return;
     await fetch(`/api/users/${openDelete.id}`, { method: "DELETE" });
@@ -93,17 +110,25 @@ export default function UsersPage() {
                 {/* Criar */}
                 <Dialog open={openCreate} onOpenChange={setOpenCreate}>
                   <DialogTrigger asChild>
-                    <Button className="bg-green-600 hover:bg-green-700 text-white">Novo Usuário</Button>
+                    <Button className="bg-green-600 hover:bg-green-700 text-white">
+                      Novo Usuário
+                    </Button>
                   </DialogTrigger>
 
-                  <DialogContent className="max-w-lg bg-gradient-to-br from-blue-50 to-blue-100">
+                  <DialogContent className="max-w-lg bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                     <DialogHeader>
-                      <DialogTitle>Cadastrar Usuário</DialogTitle>
+                      <DialogTitle className="--foreground">Cadastrar Usuário</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={createUser} className="grid gap-2">
                       <input name="name" placeholder="Nome" className="border p-2" required />
                       <input name="email" placeholder="Email" className="border p-2" required />
-                      <input name="password" placeholder="Senha" type="password" className="border p-2" required />
+                      <input
+                        name="password"
+                        placeholder="Senha"
+                        type="password"
+                        className="border p-2"
+                        required
+                      />
                       <select name="role" className="border p-2">
                         <option value="user">user</option>
                         <option value="admin">admin</option>
@@ -119,8 +144,8 @@ export default function UsersPage() {
               <CardContent>
                 <DataTable
                   columns={getColumns({
-                    onEdit: (usuario: any) => setOpenEdit({ ...usuario, id: String(usuario.id) }),
-                    onDelete: (usuario: any) => setOpenDelete({ ...usuario, id: String(usuario.id) }),
+                    onEdit: (usuario) => setOpenEdit(usuario),
+                    onDelete: (usuario) => setOpenDelete(usuario),
                   })}
                   data={users}
                 />
@@ -129,19 +154,37 @@ export default function UsersPage() {
 
             {/* Edit Modal */}
             <Dialog open={!!openEdit} onOpenChange={() => setOpenEdit(null)}>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-lg bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                 <DialogHeader>
-                  <DialogTitle>Editar Usuário</DialogTitle>
+                  <DialogTitle className="--foreground">Editar Usuário</DialogTitle>
                 </DialogHeader>
                 {openEdit && (
                   <form onSubmit={submitEdit} className="grid gap-2">
-                    <input name="name" defaultValue={openEdit.name} className="border p-2" required />
-                    <input name="email" defaultValue={openEdit.email} className="border p-2" required />
-                    <input name="password" placeholder="Nova senha (opcional)" type="password" className="border p-2" />
-                    <select name="role" defaultValue={openEdit.role} className="border p-2">
+                    <input
+                      name="name"
+                      defaultValue={openEdit.name}
+                      className="border p-2"
+                      required
+                    />
+                    <input
+                      name="email"
+                      defaultValue={openEdit.email}
+                      className="border p-2"
+                      required
+                    />
+                    <input
+                      name="password"
+                      placeholder="Nova senha (opcional)"
+                      type="password"
+                      className="border p-2"
+                    />
+                    <select
+                      name="role"
+                      defaultValue={openEdit.role}
+                      className="border p-2"
+                    >
                       <option value="user">user</option>
                       <option value="admin">admin</option>
-                      <option value="adminin">adminin</option>
                     </select>
                     <div className="flex justify-end gap-2 mt-2">
                       <Button type="submit">Salvar</Button>
@@ -153,15 +196,19 @@ export default function UsersPage() {
 
             {/* Delete confirm */}
             <Dialog open={!!openDelete} onOpenChange={() => setOpenDelete(null)}>
-              <DialogContent className="max-w-sm">
+              <DialogContent className="max-w-sm bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                 <DialogHeader>
-                  <DialogTitle>Excluir Usuário</DialogTitle>
+                  <DialogTitle className="--foreground">Excluir Usuário</DialogTitle>
                 </DialogHeader>
                 {openDelete && (
                   <div>
-                    <p>Confirma remover <strong>{openDelete.name}</strong>?</p>
+                    <p>
+                      Confirma remover <strong>{openDelete.name}</strong>?
+                    </p>
                     <div className="flex justify-end gap-2 mt-4">
-                      <Button variant="destructive" onClick={confirmDelete}>Confirmar</Button>
+                      <Button variant="destructive" onClick={confirmDelete}>
+                        Confirmar
+                      </Button>
                       <Button onClick={() => setOpenDelete(null)}>Cancelar</Button>
                     </div>
                   </div>

@@ -34,7 +34,7 @@ model Delivery {
   person     Person   @relation(fields: [personId], references: [id])
   personId   Int
   deliverer  User     @relation(fields: [delivererId], references: [id])
-  delivererId Int
+  delivererId Int?
   year       Int
   month      Int
   createdAt  DateTime @default(now())

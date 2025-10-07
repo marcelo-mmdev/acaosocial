@@ -3,6 +3,14 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "../../../components/ui/button"
 
+interface Delivery {
+  id: string
+  month: string
+  year: number
+  deliveredAt: string | null
+  createdAt: string 
+}
+
 export interface Pessoa {
   id: string
   nome: string
@@ -11,13 +19,13 @@ export interface Pessoa {
   endereco: string
   telefone: string
   dataNascimento: string
-  deliveries?: { id: number; year: number; month: number; createdAt: string }[]
+  deliveries: Delivery[]
 }
 
 interface GetColumnsProps {
   onView: (pessoa: Pessoa) => void
   onEdit: (pessoa: Pessoa) => void
-  onDelete: (id: string) => void
+  onDelete: (pessoa: Pessoa) => void
   onCarteirinha: (pessoa: Pessoa) => void
 }
 
@@ -80,7 +88,7 @@ export const getColumns = ({
           <Button
             size="sm"
             className="bg-red-600 hover:bg-red-700 text-white"
-            onClick={() => onDelete(pessoa.id)}
+            onClick={() => onDelete(pessoa)}
           >
             Excluir
           </Button>

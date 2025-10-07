@@ -1,5 +1,11 @@
 /* scanner.css */
 
+/* Responsividade do container */
+.scanner {
+  aspect-ratio: 1 / 1;
+  max-height: 80vh;
+}
+
 /* Botão "Select Camera" */
 #reader__camera_selection {
   padding: 8px 12px;
