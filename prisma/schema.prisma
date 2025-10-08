@@ -33,7 +33,7 @@ model Delivery {
   id         Int      @id @default(autoincrement())
   person     Person   @relation(fields: [personId], references: [id])
   personId   Int
-  deliverer  User     @relation(fields: [delivererId], references: [id])
+  deliverer  User?     @relation(fields: [delivererId], references: [id])
   delivererId Int?
   year       Int
   month      Int
