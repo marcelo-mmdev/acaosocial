@@ -96,8 +96,8 @@ export default function ReportsPage() {
             <CardTitle>Relatórios</CardTitle>
             {reportType && data.length > 0 && (
               <div className="flex gap-2">
-                <Button onClick={() => exportReport("pdf")}>Exportar PDF</Button>
-                <Button onClick={() => exportReport("excel")}>Exportar Excel</Button>
+                <Button onClick={() => exportReport("pdf")} className="bg-blue-600 hover:bg-blue-700 text-white">Exportar PDF</Button>
+                <Button onClick={() => exportReport("excel")} className="bg-blue-600 hover:bg-blue-700 text-white">Exportar Excel</Button>
               </div>
             )}
           </CardHeader>

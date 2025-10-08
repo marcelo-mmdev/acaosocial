@@ -13,7 +13,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           credentials?.email === "adminin@teste.com" &&
           credentials?.password === "123456"
         ) {
-          return { id: "1", name: "Admin", email: "adminin@teste.com" }
+          return { id: 1, name: "Admin", email: "adminin@teste.com" }
         }
         return null
       },

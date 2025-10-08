@@ -1,6 +1,8 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
-import prisma from "../../../../lib/prisma";
+import { prisma } from "../../../../lib/prisma";
 
 export async function GET() {
   const now = new Date();
@@ -17,11 +19,10 @@ export async function GET() {
 
   doc.on("data", (c) => chunks.push(c));
 
-  doc.fontSize(14).text("Relatório de Entregas");
+  doc.fontSize(14).text("Relatório de Entregas").moveDown();
+
   items.forEach((i) =>
-    doc.text(
-      `${i.person.name} - ${i.deliverer.name} - ${i.createdAt.toLocaleString()}`
-    )
+    doc.text(`${i.person.name} - ${i.deliverer.name} - ${i.createdAt.toLocaleString()}`)
   );
 
   doc.end();
@@ -30,7 +31,6 @@ export async function GET() {
     doc.on("end", () => res(Buffer.concat(chunks)))
   );
 
-  // ✅ Converte Buffer para Uint8Array para o NextResponse aceitar
   return new NextResponse(new Uint8Array(body), {
     headers: {
       "Content-Type": "application/pdf",

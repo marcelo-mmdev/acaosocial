@@ -1,9 +1,15 @@
+// 🚀 Corrige erro de build estático (Next tenta pré-renderizar esta rota)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextRequest, NextResponse } from "next/server";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import prisma from "../../../../lib/prisma";
+import path from "path";
+import fs from "fs";
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<Response> {
   try {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type");
@@ -12,12 +18,14 @@ export async function GET(req: NextRequest) {
     const year = Number(searchParams.get("year"));
 
     if (!type) {
-      return NextResponse.json({ error: "Tipo de relatório não informado" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tipo de relatório não informado" },
+        { status: 400 }
+      );
     }
 
     let data: any[] = [];
 
-    // 🔹 Buscar dados no banco conforme o tipo de relatório
     if (type === "people") {
       data = await prisma.person.findMany();
     } else if (type === "received") {
@@ -61,11 +69,14 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 🔹 Gerar PDF
+    // 🔹 Geração de PDF
     if (format === "pdf") {
       const doc = new PDFDocument();
+      const fontPath = path.join(process.cwd(), "src", "fonts", "Roboto-Regular.ttf");
+      if (fs.existsSync(fontPath)) doc.font(fontPath);
+
       const chunks: Buffer[] = [];
-      doc.on("data", (c) => chunks.push(c));
+      doc.on("data", (chunk) => chunks.push(chunk));
 
       doc.fontSize(16).text("Relatório", { align: "center" });
       doc.moveDown();
@@ -87,19 +98,24 @@ export async function GET(req: NextRequest) {
       }
 
       doc.end();
-      const body = await new Promise<Buffer>((resolve) =>
-        doc.on("end", () => resolve(Buffer.concat(chunks)))
-      );
 
-      return new NextResponse(new Uint8Array(body), {
+      const buffer = await new Promise<Buffer>((resolve, reject) => {
+        doc.on("end", () => resolve(Buffer.concat(chunks)));
+        doc.on("error", reject);
+      });
+
+      const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+
+      // ✅ Garante tipo compatível (usa Uint8Array como corpo)
+      return new Response(new Uint8Array(arrayBuffer), {
         headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename="relatorio_${type}.pdf"`,
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="relatorio_${type}.pdf"`,
         },
-        });
+      });
     }
 
-    // 🔹 Gerar Excel
+    // 🔹 Geração de Excel
     if (format === "excel") {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Relatório");
@@ -134,17 +150,21 @@ export async function GET(req: NextRequest) {
 
       const buffer = await workbook.xlsx.writeBuffer();
 
-      return new NextResponse(new Uint8Array(buffer), {
+      return new Response(buffer, {
         headers: {
-            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "Content-Disposition": `attachment; filename="relatorio_${type}.xlsx"`,
+          "Content-Type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="relatorio_${type}.xlsx"`,
         },
-        });
+      });
     }
 
     return NextResponse.json({ error: "Formato inválido" }, { status: 400 });
   } catch (err) {
     console.error("Erro no export:", err);
-    return NextResponse.json({ error: "Erro interno no servidor" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Erro interno no servidor" },
+      { status: 500 }
+    );
   }
 }

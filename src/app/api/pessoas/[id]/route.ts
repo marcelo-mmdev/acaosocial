@@ -1,16 +1,20 @@
-// src/app/api/pessoas/[id]/route.ts
 import { NextResponse } from "next/server";
 import prisma from "../../../../lib/prisma";
 
 function mapPersonToFront(p: any) {
-  return { ...p, nome: p.name, id: String(p.id) };
+  return { ...p, nome: p.name, id: String(p.id), deliveries: p.deliveries || [] };
 }
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
     const id = Number(params.id);
     if (isNaN(id)) return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-    const p = await prisma.person.findUnique({ where: { id } });
+
+    const p = await prisma.person.findUnique({
+      where: { id },
+      include: { deliveries: true },
+    });
+
     if (!p) return NextResponse.json({ error: "Pessoa não encontrada" }, { status: 404 });
     return NextResponse.json({ data: mapPersonToFront(p) });
   } catch (err: any) {
@@ -34,6 +38,7 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         dataNascimento: body.dataNascimento,
         photo: body.photo || null,
       },
+      include: { deliveries: true },
     });
     return NextResponse.json({ data: mapPersonToFront(pessoa) });
   } catch (err: any) {
@@ -45,7 +50,10 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
     const id = Number(params.id);
+    // Remove entregas antes da pessoa
+    await prisma.delivery.deleteMany({ where: { personId: id } });
     await prisma.person.delete({ where: { id } });
+
     return NextResponse.json({ message: "Pessoa deletada com sucesso" });
   } catch (err: any) {
     console.error("DELETE /api/pessoas/[id] error:", err);

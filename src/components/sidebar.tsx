@@ -9,13 +9,12 @@ import { signOut } from "next-auth/react"
 import { useState } from "react"
 import imagem from '../image/logo-horizontal.png';
 
-
 export function Sidebar() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
   const routes = [
-    { label: "Dashboard", icon: Home, href: "/dashboard" },
+    { label: "Dashboard", icon: Home, href: "/dashboard", exact: true },
     { label: "Beneficiários", icon: Users, href: "/dashboard/pessoas" },
     { label: "Entrega via QRCode", icon: QrCode, href: "/dashboard/validar" },
     { label: "Usuários", icon: User, href: "/users" },
@@ -50,11 +49,20 @@ export function Sidebar() {
         <nav className="flex-1 p-4 space-y-2">
           {routes.map((route) => {
             const Icon = route.icon
+
+            // Se for "exact", compara só igualdade
+            const isActive = route.exact
+              ? pathname === route.href
+              : pathname.startsWith(route.href)
+
             return (
               <Link key={route.href} href={route.href} onClick={() => setOpen(false)}>
                 <Button
-                  variant={pathname === route.href ? "secondary" : "ghost"}
-                  className={cn("w-full justify-start gap-2")}
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start gap-2",
+                    isActive && "bg-gray-100 text-blue-600"
+                  )}
                 >
                   <Icon className="h-5 w-5" />
                   {route.label}
@@ -66,16 +74,17 @@ export function Sidebar() {
 
         <div className="p-4 border-t">
           <Button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => signOut({ callbackUrl: "/" })}
             variant="destructive"
             className="w-full justify-start gap-2 bg-red-600 hover:bg-red-700 rounded-xl border px-4 py-2 text-white text-sm"
           >
             <LogOut className="h-5 w-5" />
             Sair
           </Button>
-        <p className="flex items-center justify-center text-xs text-gray-500">Sistema Caterpie 1.0.1</p>
+          <p className="flex items-center justify-center text-xs text-gray-500 mt-2">
+            Sistema Caterpie 1.0.1
+          </p>
         </div>
-
       </aside>
     </>
   )

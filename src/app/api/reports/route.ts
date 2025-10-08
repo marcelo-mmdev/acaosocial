@@ -45,13 +45,13 @@ if (type === "deliverers" && month && year) {
     include: { deliverer: true },
   });
 
-  const uniqueDeliverers = [
-    ...new Map(
-      deliveries
-        .filter((d) => d.deliverer) // garante que não é null
-        .map((d) => [d.deliverer!.id, d.deliverer!])
-    ).values(),
-  ];
+  const delivererMap = new Map<number, typeof deliveries[0]["deliverer"]>();
+for (const d of deliveries) {
+  if (d.deliverer) {
+    delivererMap.set(d.deliverer.id, d.deliverer);
+  }
+}
+const uniqueDeliverers = Array.from(delivererMap.values());
 
   return NextResponse.json({ data: uniqueDeliverers });
 }

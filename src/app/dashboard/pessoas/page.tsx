@@ -1,6 +1,7 @@
+// src/app/dashboard/pessoas/page.tsx
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { DataTable } from "../../../components/data-table"
 import { getColumns, Pessoa } from "./columns"
 import { Button } from "../../../components/ui/button"
@@ -24,60 +25,150 @@ export default function PessoasPage() {
   const [carteirinhaPessoa, setCarteirinhaPessoa] = useState<Pessoa | null>(null)
   const [abrirAdd, setAbrirAdd] = useState(false)
 
+  // modal detalhe
+  const [selectedPerson, setSelectedPerson] = useState<Pessoa | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+
+  // modal confirmação delete
+  const [deleteCandidate, setDeleteCandidate] = useState<Pessoa | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+
   const qrRef = useRef<HTMLCanvasElement | null>(null)
 
-  // --- API ---
+  // --- API: buscar lista (mapeia name->nome) ---
   const fetchPessoas = async () => {
     try {
-      const res = await fetch("/api/pessoas");
-      if (!res.ok) {
-        const j = await res.json().catch(()=>null);
-        console.error("Erro fetch /api/pessoas:", j || res.statusText);
-        return;
-      }
-      const json = await res.json();
-      const mapped = (json.data || []).map((p: any) => ({
-        ...p,
-        nome: p.nome ?? p.name,
+      const res = await fetch("/api/pessoas")
+      const json = await res.json()
+      const raw = json.data || []
+      // normaliza campos para o frontend (nome em pt)
+      const mapped: Pessoa[] = raw.map((p: any) => ({
         id: String(p.id),
-      }));
-      setPessoas(mapped);
+        nome: p.nome || p.name || "",
+        cpf: p.cpf || "",
+        rg: p.rg || "",
+        endereco: p.endereco || p.address || "",
+        telefone: p.telefone || p.phone || "",
+        dataNascimento: p.dataNascimento || p.birthDate || "",
+        deliveries: p.deliveries || [],
+      }))
+      setPessoas(mapped)
     } catch (err) {
-      console.error("Erro ao carregar pessoas:", err);
+      console.error("Erro ao carregar pessoas:", err)
+      setPessoas([])
     }
-  };
+  }
 
   useEffect(() => {
-    fetchPessoas();
-  }, []);
+    fetchPessoas()
+  }, [])
 
+  // adicionar pessoa (front envia objeto com "nome" — o back aceita name||nome)
   const handleAddPessoa = async (novaPessoa: Pessoa) => {
     await fetch("/api/pessoas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(novaPessoa),
-    });
-    setAbrirAdd(false);
-    await fetchPessoas();
-  };
+      // envia tanto name quanto nome para segurança
+      body: JSON.stringify({
+        nome: novaPessoa.nome,
+        name: novaPessoa.nome,
+        cpf: novaPessoa.cpf,
+        rg: novaPessoa.rg,
+        endereco: novaPessoa.endereco,
+        telefone: novaPessoa.telefone,
+        dataNascimento: novaPessoa.dataNascimento,
+      }),
+    })
+    setAbrirAdd(false)
+    fetchPessoas()
+  }
 
   const handleEditPessoa = async (pessoa: Pessoa) => {
     await fetch(`/api/pessoas/${pessoa.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(pessoa),
-    });
-    setEditPessoa(null);
-    await fetchPessoas();
-  };
+      body: JSON.stringify({
+        id: pessoa.id,
+        nome: pessoa.nome,
+        name: pessoa.nome,
+        cpf: pessoa.cpf,
+        rg: pessoa.rg,
+        endereco: pessoa.endereco,
+        telefone: pessoa.telefone,
+        dataNascimento: pessoa.dataNascimento,
+      }),
+    })
+    setEditPessoa(null)
+    fetchPessoas()
+  }
 
-  const handleDeletePessoa = async (id: string) => {
-    await fetch(`/api/pessoas/${id}`, { method: "DELETE" });
-    await fetchPessoas();
-  };
+  // abre modal de confirmação (não deleta direto)
+  const handleAskDeletePessoa = (p: Pessoa) => {
+    setDeleteCandidate(p)
+    setConfirmDeleteOpen(true)
+  }
 
+  const handleConfirmDelete = async () => {
+    if (!deleteCandidate) return
+    try {
+      await fetch(`/api/pessoas/${deleteCandidate.id}`, { method: "DELETE" })
+      setPessoas((prev) => prev.filter((x) => x.id !== deleteCandidate.id))
+      setDeleteCandidate(null)
+      setConfirmDeleteOpen(false)
+      // atualizar lista por segurança
+      fetchPessoas()
+    } catch (err) {
+      console.error("Erro ao deletar:", err)
+      alert("Erro ao deletar pessoa")
+    }
+  }
 
-  // --- PDF Carteirinha ---
+  // REFRESH: pega detalhe atualizado de uma pessoa (inclui deliveries)
+  const refreshSelectedPerson = useCallback(async (id?: string) => {
+    if (!id) return
+    try {
+      const res = await fetch(`/api/pessoas/${id}`)
+      if (!res.ok) return
+      const json = await res.json()
+      const data = json.data ?? json
+      const person: Pessoa = {
+        id: String(data.id),
+        nome: data.nome || data.name || "",
+        cpf: data.cpf || "",
+        rg: data.rg || "",
+        endereco: data.endereco || data.address || "",
+        telefone: data.telefone || data.phone || "",
+        dataNascimento: data.dataNascimento || data.birthDate || "",
+        deliveries: data.deliveries || [],
+      }
+      setSelectedPerson(person)
+    } catch (err) {
+      console.error("Erro ao atualizar detalhes da pessoa:", err)
+    }
+  }, [])
+
+  // pegar detalhe de uma pessoa (inicia com os dados do row e abre modal)
+  const onView = async (p: Pessoa) => {
+    try {
+      // setamos um objeto inicial (pode vir das listagem) para exibir algo rápido
+      setSelectedPerson(p)
+      setDetailOpen(true)
+      // e já pedimos a versão definitiva do servidor (com deliveries atualizadas)
+      await refreshSelectedPerson(p.id)
+    } catch (err) {
+      console.error(err)
+      alert("Erro ao carregar detalhes")
+    }
+  }
+
+  // sempre que abrir o modal para uma pessoa já selecionada, atualiza as entregas
+  useEffect(() => {
+    if (detailOpen && selectedPerson?.id) {
+      refreshSelectedPerson(selectedPerson.id)
+    }
+  }, [detailOpen, selectedPerson?.id, refreshSelectedPerson])
+
+  // PDF carteirinha (mantive comportamento anterior)
   const handleDownloadPDF = (pessoa: Pessoa) => {
     const doc = new jsPDF("portrait", "mm", "a4")
     const card = { x: 30, y: 30, w: 150, h: 90 }
@@ -100,8 +191,11 @@ export default function PessoasPage() {
     doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" })
 
     const startX = photo.x + photo.w + 8
-    let y = photo.y + 6
+    const firstY = photo.y + 6
+    let y = firstY
     const lineH = 5
+    doc.setFontSize(10)
+    doc.setTextColor(0)
 
     const row = (label: string, value: string) => {
       const lbl = `${label}: `
@@ -132,9 +226,13 @@ export default function PessoasPage() {
     doc.save(`carteirinha-${pessoa.nome}.pdf`)
   }
 
+  // filtro por pesquisa
   const filteredPessoas = pessoas.filter((p) =>
-    p.nome?.toLowerCase().includes(search.toLowerCase())
+    (p.nome || "").toLowerCase().includes(search.toLowerCase())
   )
+
+  // meses para exibir no modal
+  const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 
   return (
     <div className="flex h-screen">
@@ -145,7 +243,7 @@ export default function PessoasPage() {
       <div className="flex-1 flex flex-col">
         <header className="h-14 border-b flex items-center px-4 bg-white shadow-sm">
           <MobileSidebar />
-          <h1 className="ml-4 font-semibold">Pessoas</h1>
+          <h1 className="ml-4 font-semibold">Gerenciar Beneficíarios</h1>
         </header>
 
         <main className="flex-1 p-6 bg-gray-50">
@@ -158,25 +256,26 @@ export default function PessoasPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="max-w-sm"
               />
-              <Button onClick={() => setAbrirAdd(true)}>Adicionar Pessoa</Button>
+              <Button onClick={() => setAbrirAdd(true)} className="bg-green-600 hover:bg-green-700 text-white">+ Beneficiário</Button>
             </div>
 
             {/* Tabela */}
             <DataTable
               columns={getColumns({
+                onView,
                 onEdit: (pessoa) => setEditPessoa(pessoa),
-                onDelete: handleDeletePessoa,
+                onDelete: handleAskDeletePessoa,
                 onCarteirinha: (pessoa) => setCarteirinhaPessoa(pessoa),
               })}
               data={filteredPessoas}
             />
 
-            {/* Adicionar */}
+            {/* ---------- Modal Adicionar ---------- */}
             <Dialog open={abrirAdd} onOpenChange={setAbrirAdd}>
-              <DialogContent>
+              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                 <DialogHeader>
-                  <DialogTitle>Adicionar Pessoa</DialogTitle>
-                  <DialogDescription>Preencha os dados abaixo</DialogDescription>
+                  <DialogTitle className="--foreground">Adicionar Beneficiário</DialogTitle>
+                  <DialogDescription className="--foreground">Preencha os dados abaixo</DialogDescription>
                 </DialogHeader>
                 <form
                   onSubmit={(e) => {
@@ -184,12 +283,13 @@ export default function PessoasPage() {
                     const fd = new FormData(e.currentTarget)
                     const novaPessoa: Pessoa = {
                       id: "",
-                      nome: String(fd.get("nome")),
-                      cpf: String(fd.get("cpf")),
-                      rg: String(fd.get("rg")),
-                      endereco: String(fd.get("endereco")),
-                      telefone: String(fd.get("telefone")),
-                      dataNascimento: String(fd.get("dataNascimento")),
+                      nome: String(fd.get("nome") || ""),
+                      cpf: String(fd.get("cpf") || ""),
+                      rg: String(fd.get("rg") || ""),
+                      endereco: String(fd.get("endereco") || ""),
+                      telefone: String(fd.get("telefone") || ""),
+                      dataNascimento: String(fd.get("dataNascimento") || ""),
+                      deliveries: [],
                     }
                     handleAddPessoa(novaPessoa)
                   }}
@@ -197,26 +297,28 @@ export default function PessoasPage() {
                 >
                   <Input name="nome" placeholder="Nome" required />
                   <Input name="cpf" placeholder="CPF" required />
-                  <Input name="rg" placeholder="RG" required />
-                  <Input name="endereco" placeholder="Endereço" required />
-                  <Input name="telefone" placeholder="Telefone" required />
-                  <Input name="dataNascimento" type="date" required />
+                  <Input name="rg" placeholder="RG" />
+                  <Input name="endereco" placeholder="Endereço" />
+                  <Input name="telefone" placeholder="Telefone" />
+                  <Input name="dataNascimento" type="date" />
                   <div className="md:col-span-2 flex justify-end gap-3">
                     <Button type="button" variant="outline" onClick={() => setAbrirAdd(false)}>
                       Cancelar
                     </Button>
-                    <Button type="submit">Salvar</Button>
+                    <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white">
+                      Salvar
+                    </Button>
                   </div>
                 </form>
               </DialogContent>
             </Dialog>
 
-            {/* Editar */}
+            {/* ---------- Modal Editar ---------- */}
             {editPessoa && (
               <Dialog open={!!editPessoa} onOpenChange={() => setEditPessoa(null)}>
-                <DialogContent>
+                <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                   <DialogHeader>
-                    <DialogTitle>Editar Pessoa</DialogTitle>
+                    <DialogTitle className="--foreground">Editar Beneficiário</DialogTitle>
                   </DialogHeader>
                   <form
                     onSubmit={(e) => {
@@ -224,12 +326,13 @@ export default function PessoasPage() {
                       const fd = new FormData(e.currentTarget)
                       const pessoaEditada: Pessoa = {
                         ...editPessoa,
-                        nome: String(fd.get("nome")),
-                        cpf: String(fd.get("cpf")),
-                        rg: String(fd.get("rg")),
-                        endereco: String(fd.get("endereco")),
-                        telefone: String(fd.get("telefone")),
-                        dataNascimento: String(fd.get("dataNascimento")),
+                        nome: String(fd.get("nome") || editPessoa.nome),
+                        cpf: String(fd.get("cpf") || editPessoa.cpf),
+                        rg: String(fd.get("rg") || editPessoa.rg),
+                        endereco: String(fd.get("endereco") || editPessoa.endereco),
+                        telefone: String(fd.get("telefone") || editPessoa.telefone),
+                        dataNascimento: String(fd.get("dataNascimento") || editPessoa.dataNascimento),
+                        deliveries: editPessoa.deliveries || [],
                       }
                       handleEditPessoa(pessoaEditada)
                     }}
@@ -237,27 +340,29 @@ export default function PessoasPage() {
                   >
                     <Input name="nome" defaultValue={editPessoa.nome} required />
                     <Input name="cpf" defaultValue={editPessoa.cpf} required />
-                    <Input name="rg" defaultValue={editPessoa.rg} required />
-                    <Input name="endereco" defaultValue={editPessoa.endereco} required />
-                    <Input name="telefone" defaultValue={editPessoa.telefone} required />
-                    <Input name="dataNascimento" type="date" defaultValue={editPessoa.dataNascimento} required />
+                    <Input name="rg" defaultValue={editPessoa.rg} />
+                    <Input name="endereco" defaultValue={editPessoa.endereco} />
+                    <Input name="telefone" defaultValue={editPessoa.telefone} />
+                    <Input name="dataNascimento" type="date" defaultValue={editPessoa.dataNascimento} />
                     <div className="md:col-span-2 flex justify-end gap-3">
                       <Button type="button" variant="outline" onClick={() => setEditPessoa(null)}>
                         Cancelar
                       </Button>
-                      <Button type="submit">Salvar</Button>
+                      <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
+                        Salvar
+                      </Button>
                     </div>
                   </form>
                 </DialogContent>
               </Dialog>
             )}
 
-            {/* Carteirinha */}
+            {/* ---------- Modal Carteirinha ---------- */}
             {carteirinhaPessoa && (
               <Dialog open={!!carteirinhaPessoa} onOpenChange={() => setCarteirinhaPessoa(null)}>
-                <DialogContent>
+                <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
                   <DialogHeader>
-                    <DialogTitle>Carteirinha</DialogTitle>
+                    <DialogTitle className="--foreground">Carteirinha</DialogTitle>
                   </DialogHeader>
                   <div className="bg-[#f5f9f4] border-2 border-green-900 shadow-md rounded-xl p-5 relative">
                     <div className="text-center text-xs font-semibold text-green-900 space-y-1">
@@ -278,7 +383,7 @@ export default function PessoasPage() {
                       </div>
                     </div>
                     <div className="absolute bottom-3 right-3">
-                      <QRCodeCanvas ref={qrRef} value={`${carteirinhaPessoa.nome} - ${carteirinhaPessoa.cpf}`} size={128} includeMargin />
+                      <QRCodeCanvas ref={qrRef} value={String(carteirinhaPessoa.id)} size={128} includeMargin />
                     </div>
                   </div>
                   <div className="flex justify-end pt-4">
@@ -287,6 +392,106 @@ export default function PessoasPage() {
                 </DialogContent>
               </Dialog>
             )}
+
+            {/* ---------- Modal Detalhes (clicar no nome) ---------- */}
+            <Dialog open={detailOpen} onOpenChange={(v) => { if (!v) setSelectedPerson(null); setDetailOpen(v) }}>
+              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+                <DialogHeader>
+                  <DialogTitle className="--foreground">Detalhes da Pessoa</DialogTitle>
+                  <DialogDescription className="--foreground">Informações e histórico de entregas (cestas)</DialogDescription>
+                </DialogHeader>
+
+                {selectedPerson ? (
+                  <div className="space-y-4">
+                    <div className="flex gap-4 items-center">
+                      <div className="w-24 h-28 border bg-gray-100 flex items-center justify-center">FOTO</div>
+                      <div>
+                        <h3 className="text-lg font-semibold">{selectedPerson.nome}</h3>
+                        <div>CPF: {selectedPerson.cpf}</div>
+                        <div>RG: {selectedPerson.rg || "-"}</div>
+                        <div>Nasc: {selectedPerson.dataNascimento || "-"}</div>
+                        <div>Tel: {selectedPerson.telefone || "-"}</div>
+                        <div>Endereço: {selectedPerson.endereco || "-"}</div>
+                      </div>
+                    </div>
+
+                    {/* --- Status por mês do ano atual --- */}
+                    <div>
+                      <h4 className="font-semibold">Cestas recebidas no ano {new Date().getFullYear()}</h4>
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        {meses.map((m, idx) => {
+                          const monthNumber = idx + 1
+                          // procura entrega no mês/ano
+                          const entrega = (selectedPerson.deliveries || []).find(
+                            (d: any) =>
+                              Number(d.year) === new Date().getFullYear() &&
+                              Number(d.month) === monthNumber
+                          )
+                          // considera createdAt como deliveredAt quando deliveredAt não existir
+                          const deliveredAt = entrega?.deliveredAt ?? entrega?.createdAt
+                          const has = !!deliveredAt
+                          return (
+                            <div
+                              key={m}
+                              className={`p-2 rounded ${
+                                has
+                                  ? "bg-green-100 border border-green-400"
+                                  : "bg-red-100 border border-red-300"
+                              }`}
+                            >
+                              <div className="text-sm font-medium">{m}</div>
+                              <div className="text-xs">
+                                {has
+                                  ? `Recebeu ✅ (${new Date(deliveredAt as string).toLocaleDateString()})`
+                                  : "Não recebeu ❌"}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* --- Histórico de entregas --- */}
+                    <div>
+                      <h4 className="font-semibold">Histórico de entregas</h4>
+                      <ul className="list-disc pl-5">
+                        {(selectedPerson.deliveries || []).length === 0 && (
+                          <li>Nenhuma entrega registrada</li>
+                        )}
+                        {(selectedPerson.deliveries || []).map((d: any) => {
+                          const dt = d.deliveredAt ?? d.createdAt
+                          return (
+                            <li key={d.id}>
+                              {d.year}/{String(d.month).padStart(2, "0")} —{" "}
+                              {dt ? new Date(dt).toLocaleString() : "Não recebido"}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                ) : (
+                  <div>Carregando...</div>
+                )}
+              </DialogContent>
+            </Dialog>
+
+            {/* ---------- Modal Confirmação Deletar ---------- */}
+            <Dialog open={confirmDeleteOpen} onOpenChange={(v) => { if (!v) setDeleteCandidate(null); setConfirmDeleteOpen(v) }}>
+              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+                <DialogHeader>
+                  <DialogTitle className="--foreground">Confirmar exclusão</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p>Tem certeza que deseja excluir <strong>{deleteCandidate?.nome}</strong>?</p>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => { setConfirmDeleteOpen(false); setDeleteCandidate(null) }}>Cancelar</Button>
+                    <Button variant="destructive" onClick={handleConfirmDelete}>Excluir</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
           </div>
         </main>
       </div>

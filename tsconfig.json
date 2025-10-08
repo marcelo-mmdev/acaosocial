@@ -22,7 +22,8 @@
       {
         "name": "next"
       }
-    ]
+    ],
+    "types": ["next-auth"]
   },
   "include": [
     "next-env.d.ts",
