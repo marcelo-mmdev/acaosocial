@@ -17,6 +17,8 @@ import { QRCodeCanvas } from "qrcode.react"
 import { jsPDF } from "jspdf"
 import { MobileSidebar } from "../../../components/mobileSidebar"
 import { Sidebar } from "../../../components/sidebar"
+import imagem from "../../../image/logo-horizontal.png"
+
 
 export default function PessoasPage() {
   const [pessoas, setPessoas] = useState<Pessoa[]>([])
@@ -168,63 +170,78 @@ export default function PessoasPage() {
     }
   }, [detailOpen, selectedPerson?.id, refreshSelectedPerson])
 
-  // PDF carteirinha (mantive comportamento anterior)
-  const handleDownloadPDF = (pessoa: Pessoa) => {
-    const doc = new jsPDF("portrait", "mm", "a4")
-    const card = { x: 30, y: 30, w: 150, h: 90 }
-    doc.setDrawColor(0, 100, 0)
-    doc.setLineWidth(0.8)
-    doc.rect(card.x, card.y, card.w, card.h)
+// Substitua sua função handleDownloadPDF atual por esta
+const handleDownloadPDF = (pessoa: Pessoa) => {
+  // Tamanho da carteirinha em milímetros (10cm x 7cm)
+  const width = 100
+  const height = 70
+  const doc = new jsPDF("landscape", "mm", [height, width])
 
-    doc.setTextColor(0, 100, 0)
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(11)
-    doc.text("REPÚBLICA FEDERATIVA DA CIDADE DE TACAIMBÓ", card.x + card.w / 2, card.y + 10, { align: "center" })
-    doc.text("CARTEIRA DA SEC. ASSISTÊNCIA SOCIAL", card.x + card.w / 2, card.y + 17, { align: "center" })
+  // Fundo e borda
+  doc.setFillColor(252, 253, 255)
+  doc.roundedRect(0, 0, width, height, 4, 4, "F");
+  doc.setDrawColor(11, 58, 97)
+  doc.setLineWidth(0.8)
+  doc.roundedRect(2, 2, width - 4, height - 4, 3, 3);
 
-    const photo = { x: card.x + 8, y: card.y + 26, w: 28, h: 36 }
-    doc.setDrawColor(150)
-    doc.rect(photo.x, photo.y, photo.w, photo.h)
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(8)
-    doc.setTextColor(120)
-    doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" })
-
-    const startX = photo.x + photo.w + 8
-    const firstY = photo.y + 6
-    let y = firstY
-    const lineH = 5
-    doc.setFontSize(10)
-    doc.setTextColor(0)
-
-    const row = (label: string, value: string) => {
-      const lbl = `${label}: `
-      doc.setFont("helvetica", "bold")
-      doc.text(lbl, startX, y)
-      const lblW = doc.getTextWidth(lbl)
-      doc.setFont("helvetica", "normal")
-      doc.text(value || "-", startX + lblW, y)
-      y += lineH
-    }
-
-    row("Nome", pessoa.nome)
-    row("CPF", pessoa.cpf)
-    row("RG", pessoa.rg)
-    row("Nascimento", pessoa.dataNascimento)
-    row("Endereço", pessoa.endereco)
-    row("Telefone", pessoa.telefone)
-
-    const canvas = qrRef.current
-    if (canvas) {
-      const dataUrl = canvas.toDataURL("image/png")
-      const qrSize = 38
-      const qrX = card.x + card.w - qrSize - 10
-      const qrY = card.y + card.h - qrSize - 10
-      doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize)
-    }
-
-    doc.save(`carteirinha-${pessoa.nome}.pdf`)
+  // Logo (centralizada no topo)
+  try {
+    const logo = imagem.src // substitua por sua logo
+    doc.addImage(logo, "PNG", width / 2 - 12, 4, 24, 10)
+  } catch (err) {
+    console.warn("Logo não encontrada ou inválida")
   }
+
+  // Título
+  doc.setFont("helvetica", "bold")
+  doc.setFontSize(8)
+  doc.setTextColor(10, 10, 10)
+  doc.text("SECRETARIA DE ASSISTÊNCIA SOCIAL", width / 2, 18, { align: "center" })
+  doc.text("ALIMENTO DIREITO DE TODOS", width / 2, 23, { align: "center" })
+
+  // Foto 3x4 (28mm x 36mm equivalente no formato original, mas proporcional)
+  const photo = { x: 6, y: 27, w: 21, h: 28 }
+  doc.setDrawColor(150)
+  doc.rect(photo.x, photo.y, photo.w, photo.h)
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(7)
+  doc.setTextColor(120)
+  doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" })
+
+  // Dados da pessoa
+  let x = photo.x + photo.w + 6
+  let y = photo.y + 5
+  const lh = 4
+
+  const row = (label: string, value: string) => {
+    doc.setFont("helvetica", "bold")
+    doc.text(`${label}: `, x, y)
+    const lblW = doc.getTextWidth(`${label}: `)
+    doc.setFont("helvetica", "normal")
+    doc.text(value || "-", x + lblW, y)
+    y += lh
+  }
+
+  row("Código", 101+pessoa.id)
+  row("Nome", pessoa.nome)
+  row("CPF", pessoa.cpf)
+  row("Nascimento", pessoa.dataNascimento)
+  row("Endereço", pessoa.endereco)
+  row("Telefone", pessoa.telefone)
+
+  // QR Code
+  const canvas = qrRef.current
+  if (canvas) {
+    const dataUrl = canvas.toDataURL("image/png")
+    const qrSize = 25
+    const qrX = width - qrSize - 6
+    const qrY = height - qrSize - 14
+    doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize)
+  }
+
+  doc.save(`carteirinha-${pessoa.nome}.pdf`)
+}
+
 
   // filtro por pesquisa
   const filteredPessoas = pessoas.filter((p) =>
