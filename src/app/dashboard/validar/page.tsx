@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Html5Qrcode } from "html5-qrcode";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import {
   Dialog,
   DialogContent,
@@ -11,11 +11,10 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog";
 import { Button } from "../../../components/ui/button";
-import { QrCode, CheckCircle2 } from "lucide-react";
+import { QrCode, CheckCircle2, LogOut } from "lucide-react";
 import { Sidebar } from "../../../components/sidebar";
 import styles from "./styles.module.css";
 
-// 🔹 Criamos um tipo para extender a sessão do NextAuth
 type CustomUser = {
   id?: number;
   role?: string;
@@ -29,10 +28,11 @@ export default function ValidarPage() {
 
   const [scannedResult, setScannedResult] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [scanning, setScanning] = useState(false);
 
-  // 🔊 Beep + vibração
+  // 🔊 Som + vibração
   const playFeedback = () => {
     try {
       const audioCtx =
@@ -46,10 +46,7 @@ export default function ValidarPage() {
       gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
       oscillator.start();
       oscillator.stop(audioCtx.currentTime + 0.2);
-
-      if (navigator.vibrate) {
-        navigator.vibrate(200);
-      }
+      if (navigator.vibrate) navigator.vibrate(200);
     } catch (err) {
       console.warn("Erro ao tocar feedback:", err);
     }
@@ -67,9 +64,8 @@ export default function ValidarPage() {
   }, [scanning]);
 
   const startScanner = useCallback(async () => {
-    if (scanning) return; // 🚫 já está rodando
+    if (scanning) return;
     setScanning(true);
-
     if (!scannerRef.current) {
       scannerRef.current = new Html5Qrcode("reader");
     }
@@ -79,12 +75,9 @@ export default function ValidarPage() {
         { facingMode: "environment" },
         {
           fps: 10,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-            return {
-              width: Math.floor(minEdgeSize * 0.7),
-              height: Math.floor(minEdgeSize * 0.7),
-            };
+          qrbox: (w, h) => {
+            const min = Math.min(w, h);
+            return { width: Math.floor(min * 0.7), height: Math.floor(min * 0.7) };
           },
         },
         (decodedText) => {
@@ -93,9 +86,7 @@ export default function ValidarPage() {
           setOpen(true);
           stopScanner();
         },
-        (errorMessage) => {
-          console.warn("Erro ao ler QR Code:", errorMessage);
-        }
+        (err) => console.warn("Erro ao ler QR:", err)
       );
     } catch (err) {
       console.error("Erro ao iniciar câmera:", err);
@@ -118,11 +109,18 @@ export default function ValidarPage() {
   }, [open, stopScanner, startScanner]);
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar só aparece se o usuário for admin */}
+    <div className="flex min-h-screen bg-gray-50 relative">
+      {/* Sidebar visível apenas para admin */}
       {user?.role === "admin" && (
         <div className="hidden md:block">
           <Sidebar />
+        </div>
+      )}
+
+      {/* Feedback visual no topo */}
+      {feedback && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-xl shadow-lg z-50 animate-fade-in-out">
+          {feedback}
         </div>
       )}
 
@@ -141,16 +139,22 @@ export default function ValidarPage() {
           id="reader"
           className={`w-full max-w-sm md:max-w-md lg:max-w-lg rounded-xl shadow-lg overflow-hidden border border-gray-200 ${styles.scanner}`}
         />
-        {!scanning && (
-  <Button onClick={startScanner} className="mb-4">
-    Ativar Câmera
-  </Button>
-)}
 
+        {/* 🔹 Novo botão: voltar para login */}
+        {!scanning && (
+          <Button
+            onClick={() => signOut({ callbackUrl: "/" })}
+            className="mt-4 bg-red-600 hover:bg-red-700 text-white flex items-center gap-2"
+          >
+            <LogOut className="w-4 h-4" />
+            Voltar
+          </Button>
+        )}
       </main>
 
+      {/* 🔹 Modal de confirmação */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl shadow-xl">
+        <DialogContent className="sm:max-w-md rounded-2xl shadow-xl bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-600">
               <CheckCircle2 className="w-6 h-6" />
@@ -167,20 +171,22 @@ export default function ValidarPage() {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    personId: scannedResult, // o QR já contém o ID
-                    delivererId: user?.id, // opcional, quem entregou
+                    personId: scannedResult,
+                    delivererId: user?.id,
                   }),
                 });
 
                 const data = await res.json();
                 if (data.status === "success") {
-                  alert("Entrega registrada com sucesso ✅");
+                  setFeedback("✅ Entrega registrada com sucesso!");
                 } else if (data.status === "already_received") {
-                  alert("⚠️ Essa pessoa já recebeu neste mês!");
+                  setFeedback("⚠️ Essa pessoa já recebeu neste mês!");
                 } else {
-                  alert("Erro ao registrar entrega.");
+                  setFeedback("❌ Erro ao registrar entrega.");
                 }
+
                 setOpen(false);
+                setTimeout(() => setFeedback(null), 3000); // some em 3 segundos
               }}
             >
               Confirmar
