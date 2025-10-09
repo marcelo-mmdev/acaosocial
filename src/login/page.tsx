@@ -13,8 +13,8 @@ type LoginForm = { email: string; password: string };
 export default function LoginPage() {
   const { register, handleSubmit } = useForm<LoginForm>({
     defaultValues: {
-      email: "usb@email.com",
-      password: "123456",
+      email: "",
+      password: "",
     },
   });
   const [loading, setLoading] = useState(false);
