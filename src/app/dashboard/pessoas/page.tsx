@@ -19,6 +19,27 @@ import { MobileSidebar } from "../../../components/mobileSidebar"
 import { Sidebar } from "../../../components/sidebar"
 import imagem from "../../../image/logo-horizontal.png"
 
+// 📦 Funções de máscara e formatação
+const formatCPF = (value: string) => {
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2")
+}
+
+const formatPhone = (value: string) => {
+  return value
+    .replace(/\D/g, "")
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d{4})$/, "$1-$2")
+}
+
+const formatDate = (value: string) => {
+  if (!value) return "-"
+  const date = new Date(value)
+  return isNaN(date.getTime()) ? "-" : date.toLocaleDateString("pt-BR")
+}
 
 export default function PessoasPage() {
   const [pessoas, setPessoas] = useState<Pessoa[]>([])
@@ -35,6 +56,10 @@ export default function PessoasPage() {
   const [deleteCandidate, setDeleteCandidate] = useState<Pessoa | null>(null)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
+  // máscaras para os inputs do modal
+  const [cpfValue, setCpfValue] = useState("")
+  const [telefoneValue, setTelefoneValue] = useState("")
+
   const qrRef = useRef<HTMLCanvasElement | null>(null)
 
   // --- API: buscar lista (mapeia name->nome) ---
@@ -43,7 +68,6 @@ export default function PessoasPage() {
       const res = await fetch("/api/pessoas")
       const json = await res.json()
       const raw = json.data || []
-      // normaliza campos para o frontend (nome em pt)
       const mapped: Pessoa[] = raw.map((p: any) => ({
         id: String(p.id),
         nome: p.nome || p.name || "",
@@ -65,12 +89,22 @@ export default function PessoasPage() {
     fetchPessoas()
   }, [])
 
-  // adicionar pessoa (front envia objeto com "nome" — o back aceita name||nome)
+  // ✅ Verifica se já existe CPF cadastrado
+  const cpfJaExiste = (cpf: string, ignorarId?: string) => {
+    const clean = cpf.replace(/\D/g, "")
+    return pessoas.some((p) => p.cpf.replace(/\D/g, "") === clean && p.id !== ignorarId)
+  }
+
+  // Adicionar pessoa
   const handleAddPessoa = async (novaPessoa: Pessoa) => {
+    if (cpfJaExiste(novaPessoa.cpf)) {
+      alert("⚠️ CPF já cadastrado!")
+      return
+    }
+
     await fetch("/api/pessoas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // envia tanto name quanto nome para segurança
       body: JSON.stringify({
         nome: novaPessoa.nome,
         name: novaPessoa.nome,
@@ -86,6 +120,11 @@ export default function PessoasPage() {
   }
 
   const handleEditPessoa = async (pessoa: Pessoa) => {
+    if (cpfJaExiste(pessoa.cpf, pessoa.id)) {
+      alert("⚠️ CPF já cadastrado!")
+      return
+    }
+
     await fetch(`/api/pessoas/${pessoa.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -104,12 +143,7 @@ export default function PessoasPage() {
     fetchPessoas()
   }
 
-  // abre modal de confirmação (não deleta direto)
-  const handleAskDeletePessoa = (p: Pessoa) => {
-    setDeleteCandidate(p)
-    setConfirmDeleteOpen(true)
-  }
-
+  // Deletar pessoa
   const handleConfirmDelete = async () => {
     if (!deleteCandidate) return
     try {
@@ -117,7 +151,6 @@ export default function PessoasPage() {
       setPessoas((prev) => prev.filter((x) => x.id !== deleteCandidate.id))
       setDeleteCandidate(null)
       setConfirmDeleteOpen(false)
-      // atualizar lista por segurança
       fetchPessoas()
     } catch (err) {
       console.error("Erro ao deletar:", err)
@@ -125,12 +158,10 @@ export default function PessoasPage() {
     }
   }
 
-  // REFRESH: pega detalhe atualizado de uma pessoa (inclui deliveries)
   const refreshSelectedPerson = useCallback(async (id?: string) => {
     if (!id) return
     try {
       const res = await fetch(`/api/pessoas/${id}`)
-      if (!res.ok) return
       const json = await res.json()
       const data = json.data ?? json
       const person: Pessoa = {
@@ -145,110 +176,70 @@ export default function PessoasPage() {
       }
       setSelectedPerson(person)
     } catch (err) {
-      console.error("Erro ao atualizar detalhes da pessoa:", err)
+      console.error("Erro ao atualizar detalhes:", err)
     }
   }, [])
 
-  // pegar detalhe de uma pessoa (inicia com os dados do row e abre modal)
-  const onView = async (p: Pessoa) => {
+  const handleDownloadPDF = (pessoa: Pessoa) => {
+    const width = 100
+    const height = 70
+    const doc = new jsPDF("landscape", "mm", [height, width])
+
+    doc.setFillColor(252, 253, 255)
+    doc.roundedRect(0, 0, width, height, 4, 4, "F")
+    doc.setDrawColor(11, 58, 97)
+    doc.setLineWidth(0.8)
+    doc.roundedRect(2, 2, width - 4, height - 4, 3, 3)
+
     try {
-      // setamos um objeto inicial (pode vir das listagem) para exibir algo rápido
-      setSelectedPerson(p)
-      setDetailOpen(true)
-      // e já pedimos a versão definitiva do servidor (com deliveries atualizadas)
-      await refreshSelectedPerson(p.id)
-    } catch (err) {
-      console.error(err)
-      alert("Erro ao carregar detalhes")
+      const logo = imagem.src
+      doc.addImage(logo, "PNG", width / 2 - 12, 4, 24, 10)
+    } catch {
+      console.warn("Logo não encontrada")
     }
-  }
 
-  // sempre que abrir o modal para uma pessoa já selecionada, atualiza as entregas
-  useEffect(() => {
-    if (detailOpen && selectedPerson?.id) {
-      refreshSelectedPerson(selectedPerson.id)
-    }
-  }, [detailOpen, selectedPerson?.id, refreshSelectedPerson])
-
-// Substitua sua função handleDownloadPDF atual por esta
-const handleDownloadPDF = (pessoa: Pessoa) => {
-  // Tamanho da carteirinha em milímetros (10cm x 7cm)
-  const width = 100
-  const height = 70
-  const doc = new jsPDF("landscape", "mm", [height, width])
-
-  // Fundo e borda
-  doc.setFillColor(252, 253, 255)
-  doc.roundedRect(0, 0, width, height, 4, 4, "F");
-  doc.setDrawColor(11, 58, 97)
-  doc.setLineWidth(0.8)
-  doc.roundedRect(2, 2, width - 4, height - 4, 3, 3);
-
-  // Logo (centralizada no topo)
-  try {
-    const logo = imagem.src // substitua por sua logo
-    doc.addImage(logo, "PNG", width / 2 - 12, 4, 24, 10)
-  } catch (err) {
-    console.warn("Logo não encontrada ou inválida")
-  }
-
-  // Título
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(8)
-  doc.setTextColor(10, 10, 10)
-  doc.text("SECRETARIA DE ASSISTÊNCIA SOCIAL", width / 2, 18, { align: "center" })
-  doc.text("ALIMENTO DIREITO DE TODOS", width / 2, 23, { align: "center" })
-
-  // Foto 3x4 (28mm x 36mm equivalente no formato original, mas proporcional)
-  const photo = { x: 6, y: 27, w: 21, h: 28 }
-  doc.setDrawColor(150)
-  doc.rect(photo.x, photo.y, photo.w, photo.h)
-  doc.setFont("helvetica", "normal")
-  doc.setFontSize(7)
-  doc.setTextColor(120)
-  doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" })
-
-  // Dados da pessoa
-  let x = photo.x + photo.w + 6
-  let y = photo.y + 5
-  const lh = 4
-
-  const row = (label: string, value: string) => {
     doc.setFont("helvetica", "bold")
-    doc.text(`${label}: `, x, y)
-    const lblW = doc.getTextWidth(`${label}: `)
-    doc.setFont("helvetica", "normal")
-    doc.text(value || "-", x + lblW, y)
-    y += lh
+    doc.setFontSize(8)
+    doc.text("SECRETARIA DE ASSISTÊNCIA SOCIAL", width / 2, 18, { align: "center" })
+    doc.text("ALIMENTO DIREITO DE TODOS", width / 2, 23, { align: "center" })
+
+    const photo = { x: 6, y: 27, w: 21, h: 28 }
+    doc.rect(photo.x, photo.y, photo.w, photo.h)
+    doc.setFontSize(7)
+    doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" })
+
+    let x = photo.x + photo.w + 6
+    let y = photo.y + 5
+    const lh = 4
+    const row = (label: string, value: string) => {
+      doc.setFont("helvetica", "bold")
+      doc.text(`${label}: `, x, y)
+      const lblW = doc.getTextWidth(`${label}: `)
+      doc.setFont("helvetica", "normal")
+      doc.text(value || "-", x + lblW, y)
+      y += lh
+    }
+
+    row("Código", String(101 + Number(pessoa.id)))
+    row("Nome", pessoa.nome)
+    row("CPF", formatCPF(pessoa.cpf))
+    row("Nascimento", formatDate(pessoa.dataNascimento))
+    row("Endereço", pessoa.endereco)
+    row("Telefone", formatPhone(pessoa.telefone))
+
+    const canvas = qrRef.current
+    if (canvas) {
+      const dataUrl = canvas.toDataURL("image/png")
+      doc.addImage(dataUrl, "PNG", width - 31, height - 39, 25, 25)
+    }
+
+    doc.save(`carteirinha-${pessoa.nome}.pdf`)
   }
 
-  row("Código", 101+pessoa.id)
-  row("Nome", pessoa.nome)
-  row("CPF", pessoa.cpf)
-  row("Nascimento", pessoa.dataNascimento)
-  row("Endereço", pessoa.endereco)
-  row("Telefone", pessoa.telefone)
-
-  // QR Code
-  const canvas = qrRef.current
-  if (canvas) {
-    const dataUrl = canvas.toDataURL("image/png")
-    const qrSize = 25
-    const qrX = width - qrSize - 6
-    const qrY = height - qrSize - 14
-    doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize)
-  }
-
-  doc.save(`carteirinha-${pessoa.nome}.pdf`)
-}
-
-
-  // filtro por pesquisa
   const filteredPessoas = pessoas.filter((p) =>
-    (p.nome || "").toLowerCase().includes(search.toLowerCase())
+    (p.nome + p.cpf).toLowerCase().includes(search.toLowerCase())
   )
 
-  // meses para exibir no modal
   const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 
   return (
@@ -256,43 +247,47 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
       <div className="hidden md:flex">
         <Sidebar />
       </div>
-
       <div className="flex-1 flex flex-col">
         <header className="h-14 border-b flex items-center px-4 bg-white shadow-sm">
           <MobileSidebar />
-          <h1 className="ml-4 font-semibold">Gerenciar Beneficíarios</h1>
+          <h1 className="ml-4 font-semibold">Gerenciar Beneficiários</h1>
         </header>
-
         <main className="flex-1 p-6 bg-gray-50">
           <div className="p-6 space-y-4">
-            {/* Ações topo */}
             <div className="flex items-center justify-between gap-3">
-              <Input
-                placeholder="Pesquisar pessoas..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="max-w-sm"
-              />
-              <Button onClick={() => setAbrirAdd(true)} className="bg-green-600 hover:bg-green-700 text-white">+ Beneficiário</Button>
+              <Input placeholder="Pesquisar..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+              <Button onClick={() => setAbrirAdd(true)} className="bg-green-600 hover:bg-green-700 text-white">
+                + Beneficiário
+              </Button>
             </div>
 
-            {/* Tabela */}
             <DataTable
               columns={getColumns({
-                onView,
-                onEdit: (pessoa) => setEditPessoa(pessoa),
-                onDelete: handleAskDeletePessoa,
-                onCarteirinha: (pessoa) => setCarteirinhaPessoa(pessoa),
+                onView: (p) => {
+                  setSelectedPerson(p)
+                  setDetailOpen(true)
+                  refreshSelectedPerson(p.id)
+                },
+                onEdit: (p) => {
+                  setEditPessoa(p)
+                  setCpfValue(formatCPF(p.cpf))
+                  setTelefoneValue(formatPhone(p.telefone))
+                },
+                onDelete: (p) => {
+                  setDeleteCandidate(p)
+                  setConfirmDeleteOpen(true)
+                },
+                onCarteirinha: (p) => setCarteirinhaPessoa(p),
               })}
               data={filteredPessoas}
             />
 
             {/* ---------- Modal Adicionar ---------- */}
             <Dialog open={abrirAdd} onOpenChange={setAbrirAdd}>
-              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+              <DialogContent className="bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                 <DialogHeader>
-                  <DialogTitle className="--foreground">Adicionar Beneficiário</DialogTitle>
-                  <DialogDescription className="--foreground">Preencha os dados abaixo</DialogDescription>
+                  <DialogTitle>Adicionar Beneficiário</DialogTitle>
+                  <DialogDescription>Preencha os dados abaixo</DialogDescription>
                 </DialogHeader>
                 <form
                   onSubmit={(e) => {
@@ -301,10 +296,10 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
                     const novaPessoa: Pessoa = {
                       id: "",
                       nome: String(fd.get("nome") || ""),
-                      cpf: String(fd.get("cpf") || ""),
+                      cpf: cpfValue,
                       rg: String(fd.get("rg") || ""),
                       endereco: String(fd.get("endereco") || ""),
-                      telefone: String(fd.get("telefone") || ""),
+                      telefone: telefoneValue,
                       dataNascimento: String(fd.get("dataNascimento") || ""),
                       deliveries: [],
                     }
@@ -313,13 +308,24 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
                   className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"
                 >
                   <Input name="nome" placeholder="Nome" required />
-                  <Input name="cpf" placeholder="CPF" required />
+                  <Input
+                    name="cpf"
+                    placeholder="CPF"
+                    value={cpfValue}
+                    onChange={(e) => setCpfValue(formatCPF(e.target.value))}
+                    required
+                  />
                   <Input name="rg" placeholder="RG" />
                   <Input name="endereco" placeholder="Endereço" />
-                  <Input name="telefone" placeholder="Telefone" />
+                  <Input
+                    name="telefone"
+                    placeholder="Telefone"
+                    value={telefoneValue}
+                    onChange={(e) => setTelefoneValue(formatPhone(e.target.value))}
+                  />
                   <Input name="dataNascimento" type="date" />
                   <div className="md:col-span-2 flex justify-end gap-3">
-                    <Button type="button" variant="outline" onClick={() => setAbrirAdd(false)}>
+                    <Button type="button" onClick={() => setAbrirAdd(false)} className="bg-red-600 hover:bg-red-700 text-white">
                       Cancelar
                     </Button>
                     <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white">
@@ -333,9 +339,9 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
             {/* ---------- Modal Editar ---------- */}
             {editPessoa && (
               <Dialog open={!!editPessoa} onOpenChange={() => setEditPessoa(null)}>
-                <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+                <DialogContent className="bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                   <DialogHeader>
-                    <DialogTitle className="--foreground">Editar Beneficiário</DialogTitle>
+                    <DialogTitle>Editar Beneficiário</DialogTitle>
                   </DialogHeader>
                   <form
                     onSubmit={(e) => {
@@ -344,10 +350,10 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
                       const pessoaEditada: Pessoa = {
                         ...editPessoa,
                         nome: String(fd.get("nome") || editPessoa.nome),
-                        cpf: String(fd.get("cpf") || editPessoa.cpf),
+                        cpf: cpfValue,
                         rg: String(fd.get("rg") || editPessoa.rg),
                         endereco: String(fd.get("endereco") || editPessoa.endereco),
-                        telefone: String(fd.get("telefone") || editPessoa.telefone),
+                        telefone: telefoneValue,
                         dataNascimento: String(fd.get("dataNascimento") || editPessoa.dataNascimento),
                         deliveries: editPessoa.deliveries || [],
                       }
@@ -356,13 +362,22 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
                     className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4"
                   >
                     <Input name="nome" defaultValue={editPessoa.nome} required />
-                    <Input name="cpf" defaultValue={editPessoa.cpf} required />
+                    <Input
+                      name="cpf"
+                      value={cpfValue}
+                      onChange={(e) => setCpfValue(formatCPF(e.target.value))}
+                      required
+                    />
                     <Input name="rg" defaultValue={editPessoa.rg} />
                     <Input name="endereco" defaultValue={editPessoa.endereco} />
-                    <Input name="telefone" defaultValue={editPessoa.telefone} />
+                    <Input
+                      name="telefone"
+                      value={telefoneValue}
+                      onChange={(e) => setTelefoneValue(formatPhone(e.target.value))}
+                    />
                     <Input name="dataNascimento" type="date" defaultValue={editPessoa.dataNascimento} />
                     <div className="md:col-span-2 flex justify-end gap-3">
-                      <Button type="button" variant="outline" onClick={() => setEditPessoa(null)}>
+                      <Button type="button" onClick={() => setEditPessoa(null)} className="bg-red-600 hover:bg-red-700 text-white">
                         Cancelar
                       </Button>
                       <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -373,6 +388,7 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
                 </DialogContent>
               </Dialog>
             )}
+
 
             {/* ---------- Modal Carteirinha ---------- */}
             {carteirinhaPessoa && (
@@ -412,7 +428,7 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
 
             {/* ---------- Modal Detalhes (clicar no nome) ---------- */}
             <Dialog open={detailOpen} onOpenChange={(v) => { if (!v) setSelectedPerson(null); setDetailOpen(v) }}>
-              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+              <DialogContent className="bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                 <DialogHeader>
                   <DialogTitle className="--foreground">Detalhes da Pessoa</DialogTitle>
                   <DialogDescription className="--foreground">Informações e histórico de entregas (cestas)</DialogDescription>
@@ -495,15 +511,15 @@ const handleDownloadPDF = (pessoa: Pessoa) => {
 
             {/* ---------- Modal Confirmação Deletar ---------- */}
             <Dialog open={confirmDeleteOpen} onOpenChange={(v) => { if (!v) setDeleteCandidate(null); setConfirmDeleteOpen(v) }}>
-              <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+              <DialogContent className="bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                 <DialogHeader>
                   <DialogTitle className="--foreground">Confirmar exclusão</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <p>Tem certeza que deseja excluir <strong>{deleteCandidate?.nome}</strong>?</p>
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => { setConfirmDeleteOpen(false); setDeleteCandidate(null) }}>Cancelar</Button>
-                    <Button variant="destructive" onClick={handleConfirmDelete}>Excluir</Button>
+                    <Button variant="outline" onClick={() => { setConfirmDeleteOpen(false); setDeleteCandidate(null) }}  className="bg-red-600 hover:bg-red-700 text-white">Cancelar</Button>
+                    <Button variant="destructive" onClick={handleConfirmDelete} className="bg-green-600 hover:bg-green-700 text-white">Excluir</Button>
                   </div>
                 </div>
               </DialogContent>
