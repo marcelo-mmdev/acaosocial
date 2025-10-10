@@ -1,3 +1,240 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "incremental": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "types": ["next-auth"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "src/types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
+
+
+
+const handleDownloadPDF = (pessoa: Pessoa) => {
+  const cardW = 100; // mm (10cm)
+  const cardH = 70;  // mm (7cm)
+  const topMargin = 18; // mm — distancia do topo da folha (aumente se quiser mais abaixo)
+
+  // Cria PDF em A4 (assim a carteirinha fica dentro da folha e não é cortada)
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  // centraliza horizontalmente e aplica margem superior
+  const offsetX = Math.max(10, (pageW - cardW) / 2); // garante uma pequena margem lateral
+  const offsetY = topMargin;
+
+  // 🎨 Fundo arredondado da carteirinha
+  const borderRadius = 5;
+  doc.setFillColor(252, 253, 255);
+  doc.roundedRect(offsetX, offsetY, cardW, cardH, borderRadius, borderRadius, "F");
+
+
+  // Borda externa (um traço leve)
+  doc.setDrawColor(11, 58, 97);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(offsetX + 1, offsetY + 1, cardW - 2, cardH - 2, borderRadius - 1, borderRadius - 1);
+
+
+  // Logo (centralizada no topo do cartão)
+  try {
+    const logo = imagem.src;
+    const logoW = 30;
+    const logoH = 10;
+    doc.addImage(logo, "PNG", offsetX + (cardW - logoW) / 2, offsetY + 4, logoW, logoH);
+  } catch {
+    console.warn("Logo não encontrada");
+  }
+
+  // Cabeçalho (textos)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(10, 10, 10);
+  doc.text("SECRETARIA DE ASSISTÊNCIA SOCIAL", offsetX + cardW / 2, offsetY + 20, { align: "center" });
+  doc.text("ALIMENTO DIREITO DE TODOS", offsetX + cardW / 2, offsetY + 23, { align: "center" });
+
+  // Área da foto (posição relativa ao cartão)
+  const photo = { x: offsetX + 6, y: offsetY + 32, w: 22, h: 28 };
+  doc.setDrawColor(150);
+  doc.rect(photo.x, photo.y, photo.w, photo.h);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(120);
+  doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" });
+
+  // Dados: posicionados a partir da foto, tudo dentro do cartão
+  let x = photo.x + photo.w + 6;
+  let y = photo.y + 4;
+  const lh = 5;
+
+  const row = (label: string, value?: string | null) => {
+    const labelText = `${label}: `;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(labelText, x, y);
+    const lblW = doc.getTextWidth(labelText);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(value || "-", x + lblW, y);
+    y += lh;
+  };
+
+  row("Código", pessoa.id);
+  row("Nome", pessoa.nome);
+  row("CPF", formatCPF(pessoa.cpf));
+  row("Nascimento", formatDate(pessoa.dataNascimento));
+  row("Endereço", pessoa.endereco);
+  row("Telefone", formatPhone(pessoa.telefone));
+
+  // QR Code: dentro do cartão, canto inferior direito com margem segura
+  const qrSize = 26;
+  const qrX = offsetX + cardW - qrSize - 4;
+  const qrY = offsetY + cardH - qrSize - 16;
+  const canvas = qrRef.current;
+  if (canvas) {
+    try {
+      const dataUrl = canvas.toDataURL("image/png");
+      doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+    } catch (err) {
+      console.warn("Erro adicionando QR no PDF:", err);
+    }
+  }
+
+  // Observação: A4 com a carteirinha desenhada em tamanho real (100x70mm).
+  // Na impressão, escolha "Sem escalonamento" / "Tamanho real" para manter as medidas.
+  doc.save(`carteirinha-${pessoa.nome}.pdf`);
+};
+
+
+
+
+
+"use client"
+
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
+import { Button } from "./ui/button"
+
+interface DataTableProps<TData, TValue> {
+  columns: ColumnDef<TData, TValue>[]
+  data: TData[]
+}
+
+export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
+  const table = useReactTable({
+    data: data ?? [], // ✅ garante array, mesmo se vier undefined
+    columns: columns ?? [], // ✅ garante array
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  })
+
+  return (
+    <div>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+  {table.getRowModel().rows.length ? (
+    table.getRowModel().rows.map((row) => (
+      <TableRow key={row.id}>
+        {row.getVisibleCells().map((cell) => (
+          <TableCell key={cell.id}>
+            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+          </TableCell>
+        ))}
+      </TableRow>
+    ))
+  ) : (
+    <TableRow>
+      <TableCell colSpan={columns?.length ?? 1} className="text-center py-6">
+        Nenhum usuário encontrado.
+      </TableCell>
+    </TableRow>
+  )}
+</TableBody>
+        </Table>
+      </div>
+
+      {/* Paginação */}
+      <div className="flex items-center justify-end gap-2 mt-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => table.previousPage()}
+          disabled={!table.getCanPreviousPage()}
+        >
+          Anterior
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => table.nextPage()}
+          disabled={!table.getCanNextPage()}
+        >
+          Próximo
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+
+
+
+
+
+
 
             {/* ---------- Modal Adicionar ---------- */}
             <Dialog open={abrirAdd} onOpenChange={setAbrirAdd}>

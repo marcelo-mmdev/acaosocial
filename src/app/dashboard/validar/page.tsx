@@ -80,12 +80,14 @@ export default function ValidarPage() {
             return { width: Math.floor(min * 0.7), height: Math.floor(min * 0.7) };
           },
         },
-        (decodedText) => {
+        async (decodedText) => {
           playFeedback();
           setScannedResult(decodedText);
+          await fetchPersonData(decodedText);
           setOpen(true);
           stopScanner();
         },
+
         (err) => console.warn("Erro ao ler QR:", err)
       );
     } catch (err) {
@@ -107,6 +109,21 @@ export default function ValidarPage() {
       stopScanner().then(() => startScanner());
     }
   }, [open, stopScanner, startScanner]);
+
+  const [personData, setPersonData] = useState<{ nome?: string; cpf?: string } | null>(null);
+
+const fetchPersonData = async (id: string) => {
+  try {
+    const res = await fetch(`/api/pessoas/${id}`);
+    if (!res.ok) throw new Error("Erro ao buscar dados da pessoa");
+    const data = await res.json();
+    setPersonData(data);
+  } catch (err) {
+    console.error(err);
+    setPersonData(null);
+  }
+};
+
 
   return (
     <div className="flex min-h-screen bg-gray-50 relative">
@@ -154,12 +171,21 @@ export default function ValidarPage() {
 
       {/* 🔹 Modal de confirmação */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl shadow-xl bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+        <DialogContent className="sm:max-w-md rounded-2xl shadow-xl bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-600">
               <CheckCircle2 className="w-6 h-6" />
-              Confirmar Entrega para {scannedResult}
+              Confirmar Entrega para {personData?.nome ?? scannedResult}
             </DialogTitle>
+
+            <p className="text-sm text-gray-900 mt-1">
+              CPF: {personData?.cpf ?? "Não encontrado"}
+            </p>
+
+            {/*<DialogTitle className="flex items-center gap-2 text-green-600">
+              <CheckCircle2 className="w-6 h-6" />
+              Confirmar Entrega para {scannedResult}
+            </DialogTitle>*/}
           </DialogHeader>
           <div className="p-4 text-center">
             <Button
