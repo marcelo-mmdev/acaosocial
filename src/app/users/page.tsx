@@ -115,7 +115,7 @@ export default function UsersPage() {
                     </Button>
                   </DialogTrigger>
 
-                  <DialogContent className="max-w-lg bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+                  <DialogContent className="max-w-lg bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                     <DialogHeader>
                       <DialogTitle className="--foreground">Cadastrar Usuário</DialogTitle>
                     </DialogHeader>
@@ -134,7 +134,7 @@ export default function UsersPage() {
                         <option value="admin">admin</option>
                       </select>
                       <div className="flex justify-end gap-2 mt-2">
-                        <Button type="submit">Salvar</Button>
+                        <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white">Salvar</Button>
                       </div>
                     </form>
                   </DialogContent>
@@ -154,7 +154,7 @@ export default function UsersPage() {
 
             {/* Edit Modal */}
             <Dialog open={!!openEdit} onOpenChange={() => setOpenEdit(null)}>
-              <DialogContent className="max-w-lg bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+              <DialogContent className="max-w-lg bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                 <DialogHeader>
                   <DialogTitle className="--foreground">Editar Usuário</DialogTitle>
                 </DialogHeader>
@@ -187,7 +187,7 @@ export default function UsersPage() {
                       <option value="admin">admin</option>
                     </select>
                     <div className="flex justify-end gap-2 mt-2">
-                      <Button type="submit">Salvar</Button>
+                      <Button type="submit" className="bg-green-600 hover:bg-green-700 text-white">Salvar</Button>
                     </div>
                   </form>
                 )}
@@ -196,7 +196,7 @@ export default function UsersPage() {
 
             {/* Delete confirm */}
             <Dialog open={!!openDelete} onOpenChange={() => setOpenDelete(null)}>
-              <DialogContent className="max-w-sm bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+              <DialogContent className="max-w-sm bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                 <DialogHeader>
                   <DialogTitle className="--foreground">Excluir Usuário</DialogTitle>
                 </DialogHeader>
@@ -206,10 +206,10 @@ export default function UsersPage() {
                       Confirma remover <strong>{openDelete.name}</strong>?
                     </p>
                     <div className="flex justify-end gap-2 mt-4">
-                      <Button variant="destructive" onClick={confirmDelete}>
+                      <Button variant="destructive" onClick={confirmDelete} className="bg-green-600 hover:bg-green-700 text-white">
                         Confirmar
                       </Button>
-                      <Button onClick={() => setOpenDelete(null)}>Cancelar</Button>
+                      <Button onClick={() => setOpenDelete(null)} className="bg-red-600 hover:bg-red-700 text-white">Cancelar</Button>
                     </div>
                   </div>
                 )}

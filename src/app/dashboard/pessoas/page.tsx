@@ -36,10 +36,12 @@ const formatPhone = (value: string) => {
 }
 
 const formatDate = (value: string) => {
-  if (!value) return "-"
-  const date = new Date(value)
-  return isNaN(date.getTime()) ? "-" : date.toLocaleDateString("pt-BR")
-}
+  if (!value) return "-";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return "-";
+  return `${day}/${month}/${year}`;
+};
+
 
 export default function PessoasPage() {
   const [pessoas, setPessoas] = useState<Pessoa[]>([])
@@ -179,62 +181,150 @@ export default function PessoasPage() {
       console.error("Erro ao atualizar detalhes:", err)
     }
   }, [])
+  
+const handleDownloadPDF = (pessoa: Pessoa) => {
+  const cardW = 100; // largura da carteirinha (mm)
+  const cardH = 70;  // altura (mm)
+  const borderRadius = 5;
+  const marginTop = 20;
+  const spacing = 1; // espaço entre frente e verso
 
-  const handleDownloadPDF = (pessoa: Pessoa) => {
-    const width = 100
-    const height = 70
-    const doc = new jsPDF("landscape", "mm", [height, width])
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const offsetY = (doc.internal.pageSize.getHeight() - cardH) / 2;
+  const offsetX = (pageW - (cardW * 2 + spacing)) / 2;
 
-    doc.setFillColor(252, 253, 255)
-    doc.roundedRect(0, 0, width, height, 4, 4, "F")
-    doc.setDrawColor(11, 58, 97)
-    doc.setLineWidth(0.8)
-    doc.roundedRect(2, 2, width - 4, height - 4, 3, 3)
+  const drawCardFront = () => {
+    const x = offsetX;
+    const y = offsetY;
 
+    // fundo e borda
+    doc.setFillColor(252, 253, 255);
+    doc.roundedRect(x, y, cardW, cardH, borderRadius, borderRadius, "F");
+    doc.setDrawColor(11, 58, 97);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(x + 1, y + 1, cardW - 2, cardH - 2, borderRadius - 1, borderRadius - 1);
+
+    // logo
     try {
-      const logo = imagem.src
-      doc.addImage(logo, "PNG", width / 2 - 12, 4, 24, 10)
-    } catch {
-      console.warn("Logo não encontrada")
-    }
+      const logo = imagem.src;
+      doc.addImage(logo, "PNG", x + (cardW - 30) / 2, y + 5, 30, 10);
+    } catch {}
 
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(8)
-    doc.text("SECRETARIA DE ASSISTÊNCIA SOCIAL", width / 2, 18, { align: "center" })
-    doc.text("ALIMENTO DIREITO DE TODOS", width / 2, 23, { align: "center" })
+    // cabeçalho
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(20, 20, 20);
+    doc.text("SECRETARIA DE ASSISTÊNCIA SOCIAL", x + cardW / 2, y + 20, { align: "center" });
+    doc.text("ALIMENTO DIREITO DE TODOS", x + cardW / 2, y + 25, { align: "center" });
 
-    const photo = { x: 6, y: 27, w: 21, h: 28 }
-    doc.rect(photo.x, photo.y, photo.w, photo.h)
-    doc.setFontSize(7)
-    doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" })
+    // moldura da foto
+    const photo = { x: x + 6, y: y + 32, w: 22, h: 28 };
+    doc.setDrawColor(180);
+    doc.roundedRect(photo.x, photo.y, photo.w, photo.h, 2, 2);
+    doc.setFontSize(7);
+    doc.setTextColor(120);
+    doc.text("FOTO 3x4", photo.x + photo.w / 2, photo.y + photo.h / 2 + 2, { align: "center" });
 
-    let x = photo.x + photo.w + 6
-    let y = photo.y + 5
-    const lh = 4
-    const row = (label: string, value: string) => {
-      doc.setFont("helvetica", "bold")
-      doc.text(`${label}: `, x, y)
-      const lblW = doc.getTextWidth(`${label}: `)
-      doc.setFont("helvetica", "normal")
-      doc.text(value || "-", x + lblW, y)
-      y += lh
-    }
+    // dados da pessoa
+    let dx = photo.x + photo.w + 4;
+    let dy = photo.y + 2;
+    const lh = 5;
+    const textMaxWidth = cardW - (photo.w + 16);
 
-    row("Código", String(101 + Number(pessoa.id)))
-    row("Nome", pessoa.nome)
-    row("CPF", formatCPF(pessoa.cpf))
-    row("Nascimento", formatDate(pessoa.dataNascimento))
-    row("Endereço", pessoa.endereco)
-    row("Telefone", formatPhone(pessoa.telefone))
+    const row = (label: string, value?: string | null) => {
+      const labelText = `${label}: `;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(60, 60, 60); // cor do rótulo (cinza escuro)
+      doc.text(labelText, dx, dy);
 
-    const canvas = qrRef.current
+      const lblW = doc.getTextWidth(labelText);
+      const textX = dx + lblW;
+
+      // Quebra de linha automática se o texto for longo
+      const wrappedText = doc.splitTextToSize(value || "-", textMaxWidth - lblW);
+
+      // texto do valor em preto
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      doc.text(wrappedText, textX, dy);
+
+      // avança Y considerando linhas quebradas
+      dy += lh * wrappedText.length;
+    };
+
+    row("Código", String(pessoa.id));
+    row("Nome", pessoa.nome);
+    row("CPF", formatCPF(pessoa.cpf));
+    row("DN", formatDate(pessoa.dataNascimento));
+    row("End", pessoa.endereco);
+    row("Telefone", formatPhone(pessoa.telefone));
+
+    // QR pequeno (sem borda)
+   {/*} const qrSize = 24;
+    const qrX = x + cardW - qrSize - 2;
+    const qrY = y + cardH - qrSize - 18;
+    const canvas = qrRef.current;
+
     if (canvas) {
-      const dataUrl = canvas.toDataURL("image/png")
-      doc.addImage(dataUrl, "PNG", width - 31, height - 39, 25, 25)
+      try {
+        const dataUrl = canvas.toDataURL("image/png");
+        // 🔸 Removido o doc.roundedRect() da borda
+        doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+      } catch (err) {
+        console.warn("Erro ao adicionar QR pequeno:", err);
+      }
+    }*/}
+  };
+
+
+  const drawCardBack = () => {
+    const x = offsetX + cardW + spacing;
+    const y = offsetY;
+
+    // fundo e borda
+    doc.setFillColor(252, 253, 255);
+    doc.roundedRect(x, y, cardW, cardH, borderRadius, borderRadius, "F");
+    doc.setDrawColor(11, 58, 97);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(x + 1, y + 1, cardW - 2, cardH - 2, borderRadius - 1, borderRadius - 1);
+
+    // QR grande
+    const canvas = qrRef.current;
+    if (canvas) {
+      const dataUrl = canvas.toDataURL("image/png");
+      const bigQR = 40;
+      doc.addImage(dataUrl, "PNG", x + (cardW - bigQR) / 2, y + (cardH - bigQR) / 2 - 9, bigQR, bigQR);
     }
 
-    doc.save(`carteirinha-${pessoa.nome}.pdf`)
-  }
+    // nome e CPF
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(30, 30, 30);
+    doc.text(pessoa.nome, x + cardW / 2, y + cardH - 18, { align: "center" });
+    doc.text(pessoa.cpf, x + cardW / 2, y + cardH - 14, { align: "center" });
+
+    // rodapé
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(90, 90, 90);
+    doc.text(
+      "Prefeitura Municipal • Secretaria de Assistência Social",
+      x + cardW / 2,
+      y + cardH - 8,
+      { align: "center" }
+    );
+  };
+
+  // desenhar frente e verso
+  drawCardFront();
+  drawCardBack();
+
+  // salvar
+  doc.save(`carteirinha-${pessoa.nome}.pdf`);
+};
+
 
   const filteredPessoas = pessoas.filter((p) =>
     (p.nome + p.cpf).toLowerCase().includes(search.toLowerCase())
@@ -393,7 +483,7 @@ export default function PessoasPage() {
             {/* ---------- Modal Carteirinha ---------- */}
             {carteirinhaPessoa && (
               <Dialog open={!!carteirinhaPessoa} onOpenChange={() => setCarteirinhaPessoa(null)}>
-                <DialogContent className="bg-gradient-to-br from-[#e3effc] to-[#3b3b3b]">
+                <DialogContent className="bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                   <DialogHeader>
                     <DialogTitle className="--foreground">Carteirinha</DialogTitle>
                   </DialogHeader>
@@ -407,10 +497,11 @@ export default function PessoasPage() {
                         FOTO 3x4
                       </div>
                       <div className="flex-1 text-sm space-y-1">
+                        <p><strong>Código:</strong> {carteirinhaPessoa.id}</p>
                         <p><strong>Nome:</strong> {carteirinhaPessoa.nome}</p>
                         <p><strong>CPF:</strong> {carteirinhaPessoa.cpf}</p>
                         <p><strong>RG:</strong> {carteirinhaPessoa.rg}</p>
-                        <p><strong>Nascimento:</strong> {carteirinhaPessoa.dataNascimento}</p>
+                        <p><strong>Nascimento:</strong> {formatDate(carteirinhaPessoa.dataNascimento)}</p>
                         <p><strong>Endereço:</strong> {carteirinhaPessoa.endereco}</p>
                         <p><strong>Telefone:</strong> {carteirinhaPessoa.telefone}</p>
                       </div>
@@ -420,7 +511,7 @@ export default function PessoasPage() {
                     </div>
                   </div>
                   <div className="flex justify-end pt-4">
-                    <Button onClick={() => handleDownloadPDF(carteirinhaPessoa)}>Baixar PDF</Button>
+                    <Button onClick={() => handleDownloadPDF(carteirinhaPessoa)} className="bg-blue-600 hover:bg-blue-700 text-white">Baixar PDF</Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -430,7 +521,7 @@ export default function PessoasPage() {
             <Dialog open={detailOpen} onOpenChange={(v) => { if (!v) setSelectedPerson(null); setDetailOpen(v) }}>
               <DialogContent className="bg-gradient-to-br from-[#f0f0f0] to-[#f0f0f0]">
                 <DialogHeader>
-                  <DialogTitle className="--foreground">Detalhes da Pessoa</DialogTitle>
+                  <DialogTitle className="--foreground">Detalhes</DialogTitle>
                   <DialogDescription className="--foreground">Informações e histórico de entregas (cestas)</DialogDescription>
                 </DialogHeader>
 
@@ -440,29 +531,52 @@ export default function PessoasPage() {
                       <div className="w-24 h-28 border bg-gray-100 flex items-center justify-center">FOTO</div>
                       <div>
                         <h3 className="text-lg font-semibold">{selectedPerson.nome}</h3>
-                        <div>CPF: {selectedPerson.cpf}</div>
+
+                        {/* CPF formatado */}
+                        <div>
+                          CPF:{" "}
+                          {selectedPerson.cpf
+                            ? selectedPerson.cpf
+                                .replace(/\D/g, "")
+                                .replace(/(\d{3})(\d)/, "$1.$2")
+                                .replace(/(\d{3})(\d)/, "$1.$2")
+                                .replace(/(\d{3})(\d{1,2})$/, "$1-$2")
+                            : "-"}
+                        </div>
+
                         <div>RG: {selectedPerson.rg || "-"}</div>
                         <div>Nasc: {selectedPerson.dataNascimento || "-"}</div>
-                        <div>Tel: {selectedPerson.telefone || "-"}</div>
+
+                        {/* Telefone formatado */}
+                        <div>
+                          Tel:{" "}
+                          {selectedPerson.telefone
+                            ? selectedPerson.telefone
+                                .replace(/\D/g, "")
+                                .replace(/(\d{2})(\d)/, "($1) $2")
+                                .replace(/(\d{5})(\d{4})$/, "$1-$2")
+                            : "-"}
+                        </div>
+
                         <div>Endereço: {selectedPerson.endereco || "-"}</div>
                       </div>
                     </div>
 
                     {/* --- Status por mês do ano atual --- */}
                     <div>
-                      <h4 className="font-semibold">Cestas recebidas no ano {new Date().getFullYear()}</h4>
+                      <h4 className="font-semibold">
+                        Cestas recebidas no ano {new Date().getFullYear()}
+                      </h4>
                       <div className="grid grid-cols-3 gap-2 mt-2">
                         {meses.map((m, idx) => {
-                          const monthNumber = idx + 1
-                          // procura entrega no mês/ano
+                          const monthNumber = idx + 1;
                           const entrega = (selectedPerson.deliveries || []).find(
                             (d: any) =>
                               Number(d.year) === new Date().getFullYear() &&
                               Number(d.month) === monthNumber
-                          )
-                          // considera createdAt como deliveredAt quando deliveredAt não existir
-                          const deliveredAt = entrega?.deliveredAt ?? entrega?.createdAt
-                          const has = !!deliveredAt
+                          );
+                          const deliveredAt = entrega?.deliveredAt ?? entrega?.createdAt;
+                          const has = !!deliveredAt;
                           return (
                             <div
                               key={m}
@@ -479,7 +593,7 @@ export default function PessoasPage() {
                                   : "Não recebeu ❌"}
                               </div>
                             </div>
-                          )
+                          );
                         })}
                       </div>
                     </div>
@@ -492,13 +606,13 @@ export default function PessoasPage() {
                           <li>Nenhuma entrega registrada</li>
                         )}
                         {(selectedPerson.deliveries || []).map((d: any) => {
-                          const dt = d.deliveredAt ?? d.createdAt
+                          const dt = d.deliveredAt ?? d.createdAt;
                           return (
                             <li key={d.id}>
                               {d.year}/{String(d.month).padStart(2, "0")} —{" "}
                               {dt ? new Date(dt).toLocaleString() : "Não recebido"}
                             </li>
-                          )
+                          );
                         })}
                       </ul>
                     </div>
@@ -508,6 +622,7 @@ export default function PessoasPage() {
                 )}
               </DialogContent>
             </Dialog>
+
 
             {/* ---------- Modal Confirmação Deletar ---------- */}
             <Dialog open={confirmDeleteOpen} onOpenChange={(v) => { if (!v) setDeleteCandidate(null); setConfirmDeleteOpen(v) }}>

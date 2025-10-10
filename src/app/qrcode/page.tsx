@@ -40,6 +40,7 @@ export default function QRPage(){
       const confirmMsg = `Confirmar entrega para ${payload.name}?`
       if (window.confirm(confirmMsg)){
         const now = new Date()
+
         const body = { personId: payload.id, delivererId: Number(session.user?.id || 0), year: now.getFullYear(), month: now.getMonth()+1 }
         const res = await fetch('/api/deliveries', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body) })
         const j = await res.json()
